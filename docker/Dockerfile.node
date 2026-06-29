@@ -1,0 +1,29 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY apps/trap-web/package.json apps/trap-web/package.json
+COPY apps/tcp-traps/package.json apps/tcp-traps/package.json
+COPY apps/log-shipper/package.json apps/log-shipper/package.json
+COPY apps/network-capture/package.json apps/network-capture/package.json
+COPY apps/r2-writer/package.json apps/r2-writer/package.json
+COPY apps/dashboard/package.json apps/dashboard/package.json
+COPY packages/shared/package.json packages/shared/package.json
+
+RUN npm install
+
+COPY . .
+ARG WORKSPACE
+RUN npm run build -w ${WORKSPACE}
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=build /app /app
+RUN chown -R node:node /app
+USER node
+
+ARG ENTRYPOINT_FILE
+ENV ENTRYPOINT_FILE=${ENTRYPOINT_FILE}
+CMD ["sh", "-c", "node ${ENTRYPOINT_FILE}"]

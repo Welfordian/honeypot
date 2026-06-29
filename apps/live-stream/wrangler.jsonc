@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "honeypot-live-stream",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-29",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "dashboard.example.com/api/live-stream*",
+      "zone_name": "example.com"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LIVE_EVENTS",
+        "class_name": "LiveEvents"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["LiveEvents"]
+    }
+  ]
+}

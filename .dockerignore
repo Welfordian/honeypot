@@ -1,0 +1,13 @@
+node_modules
+apps/*/dist
+apps/dashboard/dist
+.wrangler
+.git
+.env
+.env.*
+!.env.example
+coverage
+data
+tmp
+*.log
+.DS_Store

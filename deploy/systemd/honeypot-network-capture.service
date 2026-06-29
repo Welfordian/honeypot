@@ -1,0 +1,29 @@
+[Unit]
+Description=HoneyPot host-wide network capture and generic banner sink
+After=network-online.target docker.service honeypot-r2-writer.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/honeypot
+EnvironmentFile=/opt/honeypot/.env
+ExecStart=/usr/bin/node /opt/honeypot/apps/network-capture/dist/index.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+KillMode=control-group
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/spool/honeypot-capture
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

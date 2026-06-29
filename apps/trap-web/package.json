@@ -1,0 +1,22 @@
+{
+  "name": "@honeypot/trap-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist --clean",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@honeypot/shared": "*",
+    "fastify": "^5.9.0",
+    "selfsigned": "^2.4.1",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/selfsigned": "^2.0.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "honeypot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Containerized low/medium-interaction honeypot for malicious IP tracking and analytics.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "concurrently -n r2,webtrap,tcp,dashboard -c blue,yellow,cyan,green \"npm run dev -w @honeypot/r2-writer\" \"npm run dev -w @honeypot/trap-web\" \"npm run dev -w @honeypot/tcp-traps\" \"npm run dev -w @honeypot/dashboard\"",
+    "dev:vps": "concurrently -n r2,webtrap,tcp -c blue,yellow,cyan \"npm run dev -w @honeypot/r2-writer\" \"npm run dev -w @honeypot/trap-web\" \"npm run dev -w @honeypot/tcp-traps\"",
+    "dev:dashboard": "npm run dev -w @honeypot/dashboard",
+    "test": "vitest run",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.cloudflare.json",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260629.1",
+    "@types/node": "^24.0.10",
+    "@vitejs/plugin-react": "^4.6.0",
+    "concurrently": "^9.2.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.59.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

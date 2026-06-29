@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+apps/**/dist/
+apps/dashboard/dist/
+
+# Local Cloudflare/Wrangler state
+.wrangler/
+.dev.vars
+
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+certs/
+
+# Runtime capture/log data
+data/
+tmp/
+spool/
+*.pcap
+*.pcap.gz
+*.log
+*.failed
+sensors/cowrie/var/
+sensors/cowrie/log/
+
+# Test/coverage output
+coverage/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp

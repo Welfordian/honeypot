@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sec-dashboard-router",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-29",
+  "routes": [
+    {
+      "pattern": "legacy-dashboard.example.com/*",
+      "zone_name": "example.com"
+    },
+    {
+      "pattern": "dashboard.example.com/*",
+      "zone_name": "example.com"
+    }
+  ],
+  "vars": {
+    "UPSTREAM_ORIGIN": "https://honeypot-sec.pages.dev"
+  }
+}

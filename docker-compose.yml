@@ -1,0 +1,163 @@
+name: honeypot
+
+x-safe-service: &safe-service
+  restart: unless-stopped
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:size=64m,noexec,nosuid,nodev
+  networks:
+    - honeypot_internal
+    - honeypot_public
+
+x-node-env: &node-env
+  INGEST_HMAC_SECRET: ${INGEST_HMAC_SECRET:?set INGEST_HMAC_SECRET}
+  MAX_PAYLOAD_BYTES: ${MAX_PAYLOAD_BYTES:-32768}
+
+services:
+  r2-writer:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        WORKSPACE: "@honeypot/r2-writer"
+        ENTRYPOINT_FILE: "apps/r2-writer/dist/index.js"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    environment:
+      <<: *node-env
+      NODE_ENV: production
+      WRITER_HOST: 0.0.0.0
+      WRITER_PORT: 3100
+      CLOUDFLARE_INGEST_URL: ${CLOUDFLARE_INGEST_URL:?set CLOUDFLARE_INGEST_URL}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-10000}
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - honeypot_internal
+      - honeypot_egress
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3100/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  trap-web:
+    <<: *safe-service
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        WORKSPACE: "@honeypot/trap-web"
+        ENTRYPOINT_FILE: "apps/trap-web/dist/index.js"
+    read_only: true
+    environment:
+      <<: *node-env
+      SENSOR_ID: desktopc-web-1
+      COLLECTOR_URL: http://r2-writer:3100/internal/ingest/events
+      TRAP_HTTP_HOST: 0.0.0.0
+      TRAP_HTTP_PORT: 8080
+      TRAP_HTTPS_PORT: 8443
+      TRAP_TLS_KEY_PATH: ${TRAP_TLS_KEY_PATH:-}
+      TRAP_TLS_CERT_PATH: ${TRAP_TLS_CERT_PATH:-}
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./certs/honeypot.example.com:/run/honeypot/tls:ro
+    depends_on:
+      r2-writer:
+        condition: service_healthy
+
+  tcp-traps:
+    <<: *safe-service
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        WORKSPACE: "@honeypot/tcp-traps"
+        ENTRYPOINT_FILE: "apps/tcp-traps/dist/index.js"
+    read_only: true
+    environment:
+      <<: *node-env
+      SENSOR_ID: desktopc-tcp-1
+      COLLECTOR_URL: http://r2-writer:3100/internal/ingest/events
+      TCP_TRAP_HOST: 0.0.0.0
+    ports:
+      - "21:2121"
+      - "25:2525"
+      - "8080:18080"
+      - "3306:3306"
+      - "1433:1433"
+      - "6379:6379"
+      - "3389:3389"
+      - "445:4445"
+      - "5900:5900"
+      - "161:1161/udp"
+      - "69:6969/udp"
+    depends_on:
+      r2-writer:
+        condition: service_healthy
+
+  cowrie:
+    image: cowrie/cowrie:latest
+    profiles:
+      - cowrie
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    volumes:
+      - ./sensors/cowrie/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - cowrie_state:/cowrie/cowrie-git/var
+    ports:
+      - "22:2222"
+      - "23:2223"
+    networks:
+      - honeypot_internal
+      - honeypot_public
+
+  cowrie-shipper:
+    <<: *safe-service
+    profiles:
+      - cowrie
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        WORKSPACE: "@honeypot/log-shipper"
+        ENTRYPOINT_FILE: "apps/log-shipper/dist/index.js"
+    read_only: true
+    environment:
+      <<: *node-env
+      SENSOR_ID: desktopc-cowrie-1
+      COLLECTOR_URL: http://r2-writer:3100/internal/ingest/events
+      LOG_FILE: /cowrie/log/cowrie/cowrie.json
+    volumes:
+      - cowrie_state:/cowrie:ro
+    depends_on:
+      r2-writer:
+        condition: service_healthy
+      cowrie:
+        condition: service_started
+
+networks:
+  honeypot_internal:
+    internal: true
+  honeypot_public:
+  honeypot_egress:
+
+volumes:
+  cowrie_state:
