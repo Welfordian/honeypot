@@ -95,6 +95,15 @@ describe("buildEventsQuery", () => {
     expect(query.params).toContain("%100\\%%");
   });
 
+  it("filters by httpPath substring via LIKE", () => {
+    const query = queryFrom("?httpPath=.env");
+
+    expect(query).not.toBeInstanceOf(Response);
+    if (query instanceof Response) return;
+    expect(query.sql).toContain("http_path LIKE ? ESCAPE");
+    expect(query.params).toContain("%.env%");
+  });
+
   it("rejects userAgent longer than 120 characters", () => {
     const query = queryFrom(`?userAgent=${"a".repeat(121)}`);
     expect(query).toBeInstanceOf(Response);

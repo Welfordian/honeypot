@@ -1,5 +1,7 @@
 import { FileWarning, Network, ShieldAlert, Signal } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { BarChartPanel } from "@/components/data/charts/bar-chart-panel";
 import { TimelineChart } from "@/components/data/charts/timeline-chart";
 import { EmptyState } from "@/components/data/empty-state";
@@ -7,6 +9,7 @@ import { ErrorBanner } from "@/components/data/error-banner";
 import { EventsTable } from "@/components/data/events-table";
 import { InfiniteLoader } from "@/components/data/infinite-loader";
 import { MetricCard } from "@/components/data/metric-card";
+import { VirusTotalRatio } from "@/components/data/reputation-badges";
 import { SeverityBadge } from "@/components/data/severity-badge";
 import { EventDetailSheet } from "@/components/investigation/event-detail-sheet";
 import { PageHeader } from "@/components/layout/page-header";
@@ -23,13 +26,20 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEventInspector } from "@/hooks/use-event-inspector";
 import { usePayloadDetailInfinite } from "@/hooks/use-queries";
+import { api } from "@/lib/api";
 import { buildSearchUrl } from "@/lib/investigation-links";
+import { fetchResearcherJson, getResearcherToken } from "@/lib/researcher-token";
 import { formatTime, shortHash } from "@/lib/utils";
+import type { PayloadReputationResponse } from "@/types/api";
 
 export function PayloadDetailPage() {
   const { sha256: rawSha } = useParams<{ sha256: string }>();
   const sha256 = rawSha?.toLowerCase() ?? "";
   const { selectedEvent, openEvent, closeEvent } = useEventInspector();
+  const [researcherPayload, setResearcherPayload] = useState<Record<string, unknown> | null>(null);
+  const [researcherError, setResearcherError] = useState<string | null>(null);
+  const [loadingResearcher, setLoadingResearcher] = useState(false);
+  const researcherToken = getResearcherToken();
 
   const {
     data,
@@ -40,6 +50,15 @@ export function PayloadDetailPage() {
     hasNextPage,
     error
   } = usePayloadDetailInfinite(sha256);
+
+  const reputationQuery = useQuery({
+    queryKey: ["payload-reputation", sha256],
+    queryFn: () => api.get<PayloadReputationResponse>(`/api/v1/reputation/payloads/${sha256}`),
+    enabled: Boolean(sha256),
+    staleTime: 60_000
+  });
+
+  const virusTotalStats = reputationQuery.data?.reputation.providers.virustotal;
 
   return (
     <>
@@ -55,6 +74,15 @@ export function PayloadDetailPage() {
         {error && (
           <ErrorBanner
             message={error instanceof Error ? error.message : "Failed to load payload detail."}
+          />
+        )}
+        {reputationQuery.error && (
+          <ErrorBanner
+            message={
+              reputationQuery.error instanceof Error
+                ? reputationQuery.error.message
+                : "Failed to load payload reputation."
+            }
           />
         )}
         {isLoading ? (
@@ -103,6 +131,48 @@ export function PayloadDetailPage() {
                     {data.payload.preview || "No preview stored."}
                   </p>
                 </div>
+                {researcherToken ? (
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={loadingResearcher}
+                      onClick={() => {
+                        setLoadingResearcher(true);
+                        setResearcherError(null);
+                        void fetchResearcherJson<Record<string, unknown>>(
+                          `/api/v1/researcher/payloads/${sha256}`
+                        )
+                          .then((payload) => setResearcherPayload(payload))
+                          .catch((error: unknown) => {
+                            setResearcherPayload(null);
+                            setResearcherError(
+                              error instanceof Error ? error.message : "Researcher payload request failed."
+                            );
+                          })
+                          .finally(() => setLoadingResearcher(false));
+                      }}
+                    >
+                      {loadingResearcher ? "Loading researcher view…" : "Load researcher payload view"}
+                    </Button>
+                    {researcherError && <p className="text-xs text-destructive">{researcherError}</p>}
+                    {researcherPayload && (
+                      <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-muted-foreground">
+                        {JSON.stringify(researcherPayload, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Set a researcher token on the Exports page to request expanded payload access.
+                  </p>
+                )}
+                {virusTotalStats && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium">External Reputation</h3>
+                    <VirusTotalRatio stats={virusTotalStats} />
+                  </div>
+                )}
               </CardContent>
             </Card>
 

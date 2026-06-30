@@ -1,3 +1,4 @@
+import { attackTechniqueIds } from "./attackMapping";
 import { redactPreview } from "./redaction";
 
 export interface EventRow {
@@ -43,6 +44,7 @@ export function tags(row: { tags_json?: string | null }): string[] {
 }
 
 export function publicEvent(row: EventRow) {
+  const confidence_reasons = parseJsonList(row.confidence_reasons_json);
   return {
     id: row.id,
     occurred_at: row.occurred_at,
@@ -71,7 +73,14 @@ export function publicEvent(row: EventRow) {
     pcap_available: Boolean(row.pcap_available),
     severity: row.severity,
     confidence: row.confidence,
-    confidence_reasons: parseJsonList(row.confidence_reasons_json),
+    confidence_reasons,
+    attack_techniques: attackTechniqueIds({
+      protocol: row.protocol,
+      trap: row.trap,
+      http_path: row.http_path,
+      has_credentials: Boolean(row.has_username || row.has_password),
+      confidence_reasons
+    }),
     tags: tags(row)
   };
 }

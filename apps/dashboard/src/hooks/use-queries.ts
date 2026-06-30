@@ -2,10 +2,12 @@ import { useInfiniteQuery, useQuery, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { mergeByKey } from "@/lib/utils";
 import type {
+  AttackTechniquesResponse,
   CompareResponse,
   EventFilters,
   EventRow,
   HttpIntelOverview,
+  HuntRule,
   IntelActor,
   IntelCampaigns,
   IntelOverview,
@@ -17,8 +19,10 @@ import type {
   Overview,
   PayloadDetail,
   PayloadRow,
+  PublicHuntRule,
   RollupsResponse,
-  TimelinePoint
+  TimelinePoint,
+  WebhookSubscription
 } from "@/types/api";
 
 export function useOverview() {
@@ -43,6 +47,7 @@ export function buildEventParams(filters: EventFilters, cursor?: string | null):
   if (filters.payloadHash) params.set("payloadHash", filters.payloadHash);
   if (filters.trap) params.set("trap", filters.trap);
   if (filters.userAgent) params.set("userAgent", filters.userAgent);
+  if (filters.httpPath) params.set("httpPath", filters.httpPath);
   if (cursor) params.set("cursor", cursor);
   return params;
 }
@@ -78,7 +83,7 @@ export function useIps() {
     queryKey: ["ips"],
     queryFn: ({ pageParam = 0 }) =>
       api.get<{ ips: IpProfile[]; next_offset: number | null }>(
-        `/api/v1/ips?limit=100${pageParam ? `&offset=${pageParam}` : ""}`
+        `/api/v1/ips?limit=100&enrichMissing=10${pageParam ? `&offset=${pageParam}` : ""}`
       ),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.next_offset ?? undefined,
@@ -220,6 +225,17 @@ export function useHttpIntel(sinceHours: string) {
   });
 }
 
+export function useAttackTechniques(sinceHours: string) {
+  return useQuery({
+    queryKey: ["intel-techniques", sinceHours],
+    queryFn: () =>
+      api.get<AttackTechniquesResponse>(
+        `/api/v1/intel/techniques?sinceHours=${encodeURIComponent(sinceHours)}`
+      ),
+    staleTime: 30_000
+  });
+}
+
 export function useActors(sinceHours: string, limit = 20) {
   return useQuery({
     queryKey: ["intel-actors", sinceHours, limit],
@@ -303,6 +319,55 @@ export function useNewIps(since: string) {
       api.get<NewIpsResponse>(`/api/v1/feeds/new-ips.json?since=${encodeURIComponent(since)}`),
     enabled: Boolean(since),
     staleTime: 60_000
+  });
+}
+
+const HUNT_ADMIN_TOKEN_KEY = "honeypot-indexer-admin-token";
+
+export function getHuntAdminToken(): string {
+  if (typeof window === "undefined") return "";
+  return sessionStorage.getItem(HUNT_ADMIN_TOKEN_KEY) ?? "";
+}
+
+export function setHuntAdminToken(token: string): void {
+  if (typeof window === "undefined") return;
+  if (token) sessionStorage.setItem(HUNT_ADMIN_TOKEN_KEY, token);
+  else sessionStorage.removeItem(HUNT_ADMIN_TOKEN_KEY);
+}
+
+export function huntAdminHeaders(): Record<string, string> {
+  const token = getHuntAdminToken();
+  return token ? { "x-indexer-token": token } : {};
+}
+
+export function usePublicHunts() {
+  return useQuery({
+    queryKey: ["public-hunts"],
+    queryFn: () => api.get<{ hunts: PublicHuntRule[] }>("/api/v1/hunts"),
+    staleTime: 30_000
+  });
+}
+
+export function useHuntRules() {
+  return useQuery({
+    queryKey: ["hunt-rules"],
+    queryFn: () => api.get<{ hunt_rules: HuntRule[] }>("/api/v1/admin/hunts", huntAdminHeaders()),
+    enabled: Boolean(getHuntAdminToken()),
+    staleTime: 10_000
+  });
+}
+
+export function useWebhookSubscriptions(huntRuleId?: string) {
+  const params = huntRuleId ? `?webhooks=1&hunt_rule_id=${encodeURIComponent(huntRuleId)}` : "?webhooks=1";
+  return useQuery({
+    queryKey: ["webhook-subscriptions", huntRuleId ?? "all"],
+    queryFn: () =>
+      api.get<{ webhook_subscriptions: WebhookSubscription[] }>(
+        `/api/v1/admin/hunts${params}`,
+        huntAdminHeaders()
+      ),
+    enabled: Boolean(getHuntAdminToken()),
+    staleTime: 10_000
   });
 }
 

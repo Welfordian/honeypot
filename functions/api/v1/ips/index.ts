@@ -1,4 +1,5 @@
 import type { PagesCtx } from "../../../_lib/env";
+import { enrichIpProfile } from "../../../_lib/enrichment";
 import { cachedJson, parseLimit, parseOffset, urlOf } from "../../../_lib/http";
 import { parseJsonList } from "../../../_lib/rows";
 
@@ -23,6 +24,12 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const url = urlOf(ctx.request);
   const limit = parseLimit(url, 100, 500);
   const offset = parseOffset(url);
+  const rawEnrichMissing = url.searchParams.get("enrichMissing");
+  const enrichMissing =
+    rawEnrichMissing === null
+      ? 0
+      : Math.min(25, Math.max(0, Number.parseInt(rawEnrichMissing, 10) || 0));
+
   const result = await ctx.env.DB.prepare(
     `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
        unique_traps_json, protocols_json, last_trap, last_protocol, country_code, asn, as_name
@@ -31,6 +38,29 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
      LIMIT ? OFFSET ?`
   ).bind(limit + 1, offset).all<IpRow>();
   const rows = result.results.slice(0, limit);
+
+  if (enrichMissing > 0) {
+    const missing = rows
+      .filter((row) => row.country_code == null && row.asn == null && row.as_name == null)
+      .slice(0, enrichMissing);
+    for (const row of missing) {
+      await enrichIpProfile(ctx.env.DB, row.source_ip, { bucket: ctx.env.EVENTS_BUCKET });
+    }
+    if (missing.length) {
+      const refreshed = await ctx.env.DB.prepare(
+        `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
+           unique_traps_json, protocols_json, last_trap, last_protocol, country_code, asn, as_name
+         FROM ip_profiles WHERE source_ip IN (${missing.map(() => "?").join(",")})`
+      )
+        .bind(...missing.map((row) => row.source_ip))
+        .all<IpRow>();
+      const byIp = new Map(refreshed.results.map((row) => [row.source_ip, row]));
+      for (let i = 0; i < rows.length; i += 1) {
+        const updated = byIp.get(rows[i]!.source_ip);
+        if (updated) rows[i] = updated;
+      }
+    }
+  }
 
   return cachedJson({
     ips: rows.map((row) => ({

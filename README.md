@@ -2,16 +2,16 @@
 
 A split honeypot system:
 
-- `honeypot.example.com` points at a single-purpose VPS running safe decoy services.
+- Honeypot VPS hostname points at a single-purpose server running safe decoy services.
 - The VPS only captures events and forwards signed telemetry to a Cloudflare Worker.
 - The Cloudflare Worker writes immutable raw event objects to R2 and indexes public-safe metadata into D1.
-- The public dashboard lives on Cloudflare Pages/Functions at `dashboard.example.com`.
+- The public dashboard lives on Cloudflare Pages/Functions (e.g. `https://dashboard.example.com`).
 
 The VPS has no analytics database, no dashboard, and no production-network role.
 
 ## What ships
 
-- Public `honeypot.example.com` decoy website served by the HTTP/HTTPS trap.
+- Public decoy website served by the HTTP/HTTPS trap on the VPS.
 - HTTP/HTTPS traps for fake admin, CMS, API, config leak, metadata, Docker, Kubernetes, Jenkins, Grafana, Laravel, and generic exploit probes.
 - TCP/UDP traps for FTP, SMTP, HTTP proxy, MySQL, MSSQL, Redis, RDP, SMB, VNC, SNMP, and TFTP.
 - Host-wide network capture for inbound attempts on all ports, with private 14-day PCAP chunks and public-safe metadata analytics.
@@ -54,7 +54,7 @@ npx wrangler d1 create honeypot-analytics
 npx wrangler d1 migrations apply honeypot-analytics --remote
 ```
 
-Replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc` and `apps/cloudflare-indexer/wrangler.jsonc`.
+Set the D1 database ID in **both** `wrangler.jsonc` and `apps/cloudflare-indexer/wrangler.jsonc` (`database_id`: replace `replace-with-d1-database-id` with the UUID from `wrangler d1 create`). Wrangler reads these configs at deploy time — the `D1_DATABASE_ID` placeholder in `.env.example` is for local reference only and must match the same UUID if you use it.
 
 Deploy the indexer:
 
@@ -69,13 +69,13 @@ npm run build -w @honeypot/dashboard
 npx wrangler pages deploy apps/dashboard/dist --project-name honeypot-sec --branch production
 ```
 
-Point `dashboard.example.com` at the Pages project and `honeypot.example.com` at the VPS.
+Point your dashboard hostname (e.g. `dashboard.example.com`) at the Pages project and your honeypot DNS at the VPS.
 
 ## VPS Deployment
 
 The VPS is single-purpose. Public ports can be dedicated to decoys.
 
-1. Set DNS for `honeypot.example.com` to the VPS IP.
+1. Set DNS for your honeypot hostname to the VPS IP.
 2. Copy `.env.example` to `.env` and set `INGEST_HMAC_SECRET` and `CLOUDFLARE_INGEST_URL`.
 3. Start the VPS stack:
 
@@ -123,5 +123,14 @@ Cloudflare Pages Functions expose public, sanitized APIs:
 - `/api/exports/blocklist.txt`
 - `/api/v1/network`
 - `/api/exports/network.csv`
+- `/api/v1/reputation/ips/:ip` — GreyNoise classification (cached 24h)
+- `/api/v1/reputation/payloads/:sha256` — VirusTotal detection stats (cached 24h)
+
+Optional Wrangler secrets for external reputation overlays:
+
+```sh
+npx wrangler pages secret put GREYNOISE_API_KEY --project-name honeypot-sec
+npx wrangler pages secret put VIRUSTOTAL_API_KEY --project-name honeypot-sec
+```
 
 Raw R2 objects and private PCAP chunks are not exposed by the dashboard.

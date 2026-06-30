@@ -7,6 +7,7 @@ import { ErrorBanner } from "@/components/data/error-banner";
 import { EventsTable } from "@/components/data/events-table";
 import { InfiniteLoader } from "@/components/data/infinite-loader";
 import { MetricCard } from "@/components/data/metric-card";
+import { ReputationBadges } from "@/components/data/reputation-badges";
 import { ReasonChips } from "@/components/data/reason-chips";
 import { EventDetailSheet } from "@/components/investigation/event-detail-sheet";
 import { PageHeader } from "@/components/layout/page-header";
@@ -18,7 +19,7 @@ import { useIpDetailInfinite } from "@/hooks/use-queries";
 import { api } from "@/lib/api";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { formatTime } from "@/lib/utils";
-import type { IpDetail } from "@/types/api";
+import type { IpDetail, ReputationSummary } from "@/types/api";
 
 export function IpDetailPage() {
   const { ip: rawIp } = useParams<{ ip: string }>();
@@ -50,7 +51,18 @@ export function IpDetailPage() {
     staleTime: 60_000
   });
 
+  const reputationQuery = useQuery({
+    queryKey: ["ip-reputation", ip],
+    queryFn: () =>
+      api.get<{ ip: string; reputation: ReputationSummary }>(
+        `/api/v1/reputation/ips/${encodeURIComponent(ip)}`
+      ),
+    enabled: Boolean(ip),
+    staleTime: 60_000
+  });
+
   const displayProfile = enrichQuery.data?.profile ?? profile;
+  const reputation = reputationQuery.data?.reputation;
 
   return (
     <>
@@ -65,6 +77,15 @@ export function IpDetailPage() {
 
         {error && (
           <ErrorBanner message={error instanceof Error ? error.message : "Failed to load IP detail."} />
+        )}
+        {reputationQuery.error && (
+          <ErrorBanner
+            message={
+              reputationQuery.error instanceof Error
+                ? reputationQuery.error.message
+                : "Failed to load IP reputation."
+            }
+          />
         )}
         {isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -125,6 +146,12 @@ export function IpDetailPage() {
                       <p className="text-xs text-muted-foreground">Organization</p>
                       <p className="font-medium">{displayProfile.as_name || "—"}</p>
                     </div>
+                  </div>
+                )}
+                {reputation?.providers.greynoise && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium">External Reputation</h3>
+                    <ReputationBadges greynoise={reputation.providers.greynoise} />
                   </div>
                 )}
                 <div>

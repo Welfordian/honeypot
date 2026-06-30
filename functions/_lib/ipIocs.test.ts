@@ -12,7 +12,10 @@ describe("IP IOC feed builder", () => {
         confidence: 85,
         confidence_reasons_json: '["credential_attempt"]',
         unique_traps_json: '["env"]',
-        protocols_json: '["http"]'
+        protocols_json: '["http"]',
+        country_code: "US",
+        asn: 15169,
+        as_name: "Google LLC"
       })
     ).toEqual({
       source_ip: "203.0.113.10",
@@ -22,7 +25,10 @@ describe("IP IOC feed builder", () => {
       score: 8,
       confidence_reasons: ["credential_attempt"],
       unique_traps: ["env"],
-      protocols: ["http"]
+      protocols: ["http"],
+      country_code: "US",
+      asn: 15169,
+      as_name: "Google LLC"
     });
   });
 
@@ -35,6 +41,7 @@ describe("IP IOC feed builder", () => {
     if (query instanceof Response) return;
     expect(query.sql).toContain("confidence >= ?");
     expect(query.sql).toContain("first_seen >= ?");
+    expect(query.sql).toContain("country_code");
     expect(query.params).toContain(50);
     expect(query.params).toContain("2026-06-29T00:00:00.000Z");
   });

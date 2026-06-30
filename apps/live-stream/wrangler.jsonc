@@ -10,8 +10,8 @@
   "workers_dev": false,
   "routes": [
     {
-      "pattern": "dashboard.example.com/api/live-stream*",
-      "zone_name": "example.com"
+      "pattern": "pot.welford.me/api/live-stream*",
+      "zone_name": "welford.me"
     }
   ],
   "durable_objects": {

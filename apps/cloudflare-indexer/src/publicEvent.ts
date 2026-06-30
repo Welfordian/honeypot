@@ -1,5 +1,6 @@
 import type { StoredR2Event } from "./types.js";
 import { confidenceForEvent } from "@honeypot/shared";
+import { redactPreview } from "../../../functions/_lib/redaction.js";
 
 const MAX_TEXT = {
   eventKind: 48,
@@ -35,29 +36,7 @@ export function publicPayloadPreview(event: StoredR2Event): string {
   return redactPreview(preview);
 }
 
-export function redactPreview(value: string): string {
-  let redacted = value.replace(/([A-Za-z0-9_ -]{0,32}(?:password|passwd|secret|token|key)[A-Za-z0-9_ -]{0,32})=([^&\s]+)/gi, "$1=[redacted]");
-  const marker = "login attempt [";
-  let lower = redacted.toLowerCase();
-  let markerIndex = lower.indexOf(marker);
-
-  while (markerIndex >= 0) {
-    const valueStart = markerIndex + marker.length;
-    const valueEnd = redacted.indexOf("]", valueStart);
-    if (valueEnd < 0) break;
-
-    const bracketValue = redacted.slice(valueStart, valueEnd);
-    if (bracketValue.includes("/")) {
-      redacted = `${redacted.slice(0, valueStart)}[redacted]/[redacted]${redacted.slice(valueEnd)}`;
-      lower = redacted.toLowerCase();
-      markerIndex = lower.indexOf(marker, valueStart + "[redacted]/[redacted]".length);
-    } else {
-      markerIndex = lower.indexOf(marker, valueEnd + 1);
-    }
-  }
-
-  return redacted;
-}
+export { redactPreview };
 
 export function publicEventRow(event: StoredR2Event, r2Key: string, indexedAt: string) {
   const confidence = confidenceForEvent({

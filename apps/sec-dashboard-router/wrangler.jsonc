@@ -5,12 +5,12 @@
   "compatibility_date": "2026-06-29",
   "routes": [
     {
-      "pattern": "legacy-dashboard.example.com/*",
-      "zone_name": "example.com"
+      "pattern": "legacy-dashboard.welford.me/*",
+      "zone_name": "welford.me"
     },
     {
-      "pattern": "dashboard.example.com/*",
-      "zone_name": "example.com"
+      "pattern": "pot.welford.me/*",
+      "zone_name": "welford.me"
     }
   ],
   "vars": {

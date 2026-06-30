@@ -40,6 +40,7 @@ describe("public event serialization", () => {
       event_kind: "trap",
       confidence: 92,
       confidence_reasons: ["payload_present"],
+      attack_techniques: ["T1110"],
       payload_preview: "APP_KEY=[redacted]"
     });
   });
@@ -73,6 +74,20 @@ describe("public event serialization", () => {
     });
     expect(JSON.stringify(publicEvent(network))).not.toContain(".pcap");
     expect(JSON.stringify(publicEvent(network))).not.toContain("r2_key");
+  });
+
+  it("maps attack techniques from path and credential signals", () => {
+    const login = publicEvent({
+      ...row,
+      http_path: "/wp-login.php",
+      has_username: 1,
+      has_password: 1,
+      confidence_reasons_json: '["credential_attempt","scanner_user_agent"]'
+    });
+
+    expect(login.attack_techniques).toEqual(
+      expect.arrayContaining(["T1110", "T1110.001", "T1595.002"])
+    );
   });
 
   it("builds an event page cursor from the last returned row", () => {

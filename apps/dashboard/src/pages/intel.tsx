@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { RollupLineChart } from "@/components/data/charts/rollup-line-chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useIntelOverview, useHttpIntel, useRollups } from "@/hooks/use-queries";
+import { useIntelOverview, useHttpIntel, useAttackTechniques, useRollups } from "@/hooks/use-queries";
 import { api } from "@/lib/api";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { shortHash } from "@/lib/utils";
@@ -37,6 +37,11 @@ export function IntelPage() {
     isLoading: httpLoading,
     error: httpError
   } = useHttpIntel(appliedHours);
+  const {
+    data: attackTechniques,
+    isLoading: techniquesLoading,
+    error: techniquesError
+  } = useAttackTechniques(appliedHours);
   const attackerIps = data?.topAttackers.map((attacker) => attacker.key) ?? [];
 
   const enrichmentQueries = useQueries({
@@ -57,6 +62,8 @@ export function IntelPage() {
     });
     return map;
   }, [attackerIps, enrichmentQueries]);
+
+  const enrichmentError = enrichmentQueries.find((query) => query.error)?.error;
 
   const topAttackers = useMemo(
     () =>
@@ -100,6 +107,15 @@ export function IntelPage() {
 
         {error && (
           <ErrorBanner message={error instanceof Error ? error.message : "Failed to load intel overview."} />
+        )}
+        {enrichmentError && (
+          <ErrorBanner
+            message={
+              enrichmentError instanceof Error
+                ? enrichmentError.message
+                : "Failed to enrich top attacker IP profiles."
+            }
+          />
         )}
 
         {isLoading ? (
@@ -253,6 +269,76 @@ export function IntelPage() {
                     </Card>
                   )}
                 </>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">ATT&amp;CK Techniques</h2>
+              {techniquesError && (
+                <ErrorBanner
+                  message={
+                    techniquesError instanceof Error
+                      ? techniquesError.message
+                      : "Failed to load ATT&CK techniques."
+                  }
+                />
+              )}
+              {techniquesLoading ? (
+                <Skeleton className="h-[220px]" />
+              ) : !attackTechniques?.techniques.length ? (
+                <EmptyState message="No ATT&CK techniques mapped in this window." />
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Technique</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Tactic</TableHead>
+                            <TableHead>Events</TableHead>
+                            <TableHead>Example IPs</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {attackTechniques.techniques.map((technique) => (
+                            <TableRow key={technique.id}>
+                              <TableCell className="font-mono text-xs">
+                                <a
+                                  href={technique.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {technique.id}
+                                </a>
+                              </TableCell>
+                              <TableCell className="max-w-[240px] text-sm">{technique.name}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{technique.tactic}</Badge>
+                              </TableCell>
+                              <TableCell>{technique.count}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  {technique.example_ips.map((ip) => (
+                                    <Link
+                                      key={`${technique.id}-${ip}`}
+                                      to={`/ips/${encodeURIComponent(ip)}`}
+                                      className="font-mono text-xs text-primary hover:underline"
+                                    >
+                                      {ip}
+                                    </Link>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </section>
 

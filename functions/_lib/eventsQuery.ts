@@ -22,6 +22,7 @@ export function buildEventsQuery(url: URL, options?: EventsQueryOptions): Events
   const payloadHash = publicSha256(url.searchParams.get("payloadHash"));
   const tag = token(url.searchParams.get("tag"), 80);
   const userAgent = likeSubstring(url.searchParams.get("userAgent"), 120);
+  const httpPath = likeSubstring(url.searchParams.get("httpPath"), 240);
   const confidenceReason = token(url.searchParams.get("confidenceReason"), 48);
   const rawMinConfidence = url.searchParams.get("minConfidence");
   const minConfidence = rawMinConfidence ? Number(rawMinConfidence) : null;
@@ -44,6 +45,9 @@ export function buildEventsQuery(url: URL, options?: EventsQueryOptions): Events
   if (url.searchParams.get("tag") && !tag) return new Response("invalid tag", { status: 400 });
   if (url.searchParams.get("userAgent") && !userAgent) {
     return new Response("invalid user agent", { status: 400 });
+  }
+  if (url.searchParams.get("httpPath") && !httpPath) {
+    return new Response("invalid httpPath", { status: 400 });
   }
   if (url.searchParams.get("confidenceReason") && !confidenceReason) {
     return new Response("invalid confidence reason", { status: 400 });
@@ -94,6 +98,10 @@ export function buildEventsQuery(url: URL, options?: EventsQueryOptions): Events
   if (userAgent) {
     where.push("user_agent LIKE ? ESCAPE '\\'");
     params.push(userAgent);
+  }
+  if (httpPath) {
+    where.push("http_path LIKE ? ESCAPE '\\'");
+    params.push(httpPath);
   }
   if (confidenceReason) {
     where.push("EXISTS (SELECT 1 FROM json_each(confidence_reasons_json) WHERE value = ?)");

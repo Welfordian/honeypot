@@ -1,5 +1,6 @@
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { ResearcherTokenCard } from "@/components/settings/researcher-token-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
@@ -10,7 +11,8 @@ export function ExportsPage() {
   return (
     <>
       <PageHeader title="Exports" />
-      <div className="p-4 sm:p-6">
+      <div className="flex flex-col gap-4 p-4 sm:p-6">
+        <ResearcherTokenCard />
         <Card>
           <CardContent className="flex flex-col gap-3 p-4">
             <Button
@@ -81,6 +83,42 @@ export function ExportsPage() {
             >
               <Download className="h-4 w-4" />
               IP IOC STIX 2.1 Bundle
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() =>
+                void api.download("/api/v1/feeds/artifacts.json?limit=500", "honeypot-artifacts.json")
+              }
+            >
+              <Download className="h-4 w-4" />
+              Artifact IOC JSON Feed
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() =>
+                void api.download(
+                  "/api/v1/feeds/artifacts.ndjson?limit=500",
+                  "honeypot-artifacts.ndjson"
+                )
+              }
+            >
+              <Download className="h-4 w-4" />
+              Artifact IOC NDJSON Feed
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() =>
+                void api.download(
+                  "/api/v1/feeds/artifacts.stix.json?limit=500",
+                  "honeypot-artifacts.stix.json"
+                )
+              }
+            >
+              <Download className="h-4 w-4" />
+              Combined IP + Artifact STIX Bundle
             </Button>
             <Button
               variant="outline"

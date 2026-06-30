@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://dashboard.example.com/sitemap.xml
+Sitemap: https://pot.welford.me/sitemap.xml

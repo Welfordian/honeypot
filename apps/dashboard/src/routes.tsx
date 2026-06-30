@@ -10,6 +10,7 @@ const LEGACY_VIEW_MAP: Record<string, string> = {
   intel: "/intel",
   actors: "/actors",
   health: "/health",
+  hunts: "/hunts",
   docs: "/docs",
   api: "/docs"
 };

@@ -2,8 +2,8 @@ interface Env {
   UPSTREAM_ORIGIN: string;
 }
 
-const CANONICAL_HOST = "dashboard.example.com";
-const LEGACY_HOST = "legacy-dashboard.example.com";
+const CANONICAL_HOST = "pot.welford.me";
+const LEGACY_HOST = "legacy-dashboard.welford.me";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

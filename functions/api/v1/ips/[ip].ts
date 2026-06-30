@@ -1,6 +1,7 @@
 import type { PagesCtx } from "../../../_lib/env";
 import { enrichIpProfile, enrichmentFromRow, needsEnrichment } from "../../../_lib/enrichment";
 import { badRequest, cachedJson, json, parseEventCursor, parseLimit, publicIp, urlOf } from "../../../_lib/http";
+import { getIpReputation } from "../../../_lib/reputation";
 import { parseJsonList, publicEventPage, type EventRow } from "../../../_lib/rows";
 
 interface IpRow {
@@ -37,6 +38,7 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   eventParams.push(limit + 1);
 
   const enrich = url.searchParams.get("enrich") === "true";
+  const includeReputation = url.searchParams.get("reputation") === "true";
 
   let profile = await ctx.env.DB.prepare(
     `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
@@ -67,7 +69,9 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   ).bind(...eventParams).all<EventRow>();
   const eventPage = publicEventPage(events.results, limit);
 
-  return cachedJson({
+  const reputation = includeReputation ? await getIpReputation(ctx.env.DB, ip, ctx.env) : undefined;
+
+  const body = {
     profile: {
       source_ip: profile.source_ip,
       first_seen: profile.first_seen,
@@ -82,6 +86,9 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
       last_protocol: profile.last_protocol,
       ...enrichmentFromRow(profile)
     },
+    ...(reputation ? { reputation } : {}),
     ...eventPage
-  });
+  };
+
+  return includeReputation ? json(body) : cachedJson(body);
 };

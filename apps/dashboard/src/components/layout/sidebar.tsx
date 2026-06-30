@@ -1,5 +1,6 @@
 import {
   Activity,
+  Bell,
   BookOpen,
   Crosshair,
   Download,
@@ -25,6 +26,7 @@ export const navItems = [
   { to: "/network", label: "Network", icon: Network },
   { to: "/ips", label: "IPs", icon: Network },
   { to: "/payloads", label: "Payloads", icon: FileWarning },
+  { to: "/hunts", label: "Hunts", icon: Bell },
   { to: "/health", label: "Health", icon: HeartPulse },
   { to: "/exports", label: "Exports", icon: Download },
   { to: "/docs", label: "API", icon: BookOpen }

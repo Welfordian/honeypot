@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/table";
 import { CONFIDENCE_REASONS } from "@/types/api";
 
-const BASE = typeof window === "undefined" ? "https://dashboard.example.com" : window.location.origin;
+const PRODUCTION_ORIGIN = "https://dashboard.example.com";
+const BASE = typeof window === "undefined" ? PRODUCTION_ORIGIN : window.location.origin;
 const WS_BASE = BASE.replace(/^http/, "ws");
 
 type HttpMethod = "GET" | "WS";
@@ -95,6 +96,9 @@ const sections: Section[] = [
             description: `Confidence reason (${CONFIDENCE_REASONS.slice(0, 4).join(", ")}, …).`
           },
           { name: "payloadHash", type: "sha256", description: "Filter by payload SHA-256." },
+          { name: "trap", type: "token", description: "Filter by trap name." },
+          { name: "userAgent", type: "string", description: "Substring match on HTTP user agent (max 120 chars)." },
+          { name: "httpPath", type: "string", description: "Substring match on HTTP request path (max 240 chars)." },
           { name: "cursor", type: "string", description: "Pagination cursor: occurred_at|id from next_cursor." },
           { name: "limit", type: "integer", default: "100", description: "Page size (1–500)." }
         ],
@@ -119,6 +123,55 @@ const sections: Section[] = [
           "{ topAttackers[], topConfidenceReasons[], topTags[], credentialAttempts, highConfidenceIps, campaigns[] }",
         cache: CACHED,
         example: "/api/v1/intel/overview?sinceHours=72"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/intel/techniques",
+        description:
+          "MITRE ATT&CK techniques observed in honeypot events, ranked by count with example events and source IPs.",
+        params: [
+          { name: "sinceHours", type: "integer", default: "24", description: "Lookback window (1–720 hours)." }
+        ],
+        response: "{ sinceHours, techniques[] } where each technique has id, name, tactic, url, count, example_events[], example_ips[]",
+        cache: CACHED,
+        example: "/api/v1/intel/techniques?sinceHours=24"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/intel/http",
+        description:
+          "HTTP attack surface: top paths, user agents, exploit probe trends, and credential probe paths.",
+        params: [
+          { name: "sinceHours", type: "integer", default: "24", description: "Lookback window (1–720 hours)." }
+        ],
+        response: "{ topPaths[], topUserAgents[], probeTrends[], credentialPaths[] }",
+        cache: CACHED,
+        example: "/api/v1/intel/http?sinceHours=24"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/intel/actors",
+        description:
+          "Top source IPs with trap sequences, protocols, tags, related payloads, and sibling IPs sharing traps and user-agent prefixes.",
+        params: [
+          { name: "sinceHours", type: "integer", default: "168", description: "Lookback window (1–720 hours)." },
+          { name: "limit", type: "integer", default: "20", description: "Max actors (1–50)." }
+        ],
+        response: "{ actors[] } with actor_id, source_ip, event_count, confidence, trap_sequence[], protocols[], tags[], related_payloads[], related_ips[]",
+        cache: CACHED,
+        example: "/api/v1/intel/actors?sinceHours=168&limit=20"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/intel/campaigns",
+        description:
+          "Payload-hash campaigns and behavioral campaigns grouped by shared trap fingerprints across IPs.",
+        params: [
+          { name: "sinceHours", type: "integer", default: "168", description: "Lookback window (1–720 hours)." }
+        ],
+        response: "{ payload_campaigns[], behavioral_campaigns[] }",
+        cache: CACHED,
+        example: "/api/v1/intel/campaigns?sinceHours=168"
       }
     ]
   },
@@ -149,7 +202,13 @@ const sections: Section[] = [
         description: "Ranked IP profiles with confidence scores. Legacy alias: /api/ips.",
         params: [
           { name: "limit", type: "integer", default: "100", description: "Page size (1–500)." },
-          { name: "offset", type: "integer", default: "0", description: "Offset for pagination; use next_offset." }
+          { name: "offset", type: "integer", default: "0", description: "Offset for pagination; use next_offset." },
+          {
+            name: "enrichMissing",
+            type: "integer",
+            description:
+              "If set (1–25), enrich up to N list rows missing country/ASN via the IPinfo Lite MMDB in R2."
+          }
         ],
         response: "{ ips: IpProfile[], next_offset: number | null }",
         cache: CACHED,
@@ -167,9 +226,14 @@ const sections: Section[] = [
             type: "boolean",
             description:
               '"true" to look up missing country/ASN fields on demand via the IPinfo Lite MMDB in R2.'
+          },
+          {
+            name: "reputation",
+            type: "boolean",
+            description: '"true" to include cached GreyNoise reputation in the response.'
           }
         ],
-        response: "{ profile: IpProfile, events: EventRow[], next_cursor: string | null }",
+        response: "{ profile: IpProfile, events: EventRow[], next_cursor: string | null, reputation?: ReputationSummary }",
         cache: CACHED,
         example: `${BASE}/api/v1/ips/203.0.113.10?limit=25`
       },
@@ -227,6 +291,65 @@ const sections: Section[] = [
         example: "/api/v1/payloads/abc123…/timeline"
       }
     ]
+  },
+  {
+    id: "reputation",
+    title: "External Reputation",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/reputation/ips/:ip",
+        description:
+          "GreyNoise Community classification for a source IP. Results are cached in D1 for 24 hours.",
+        response: "{ ip: string, reputation: ReputationSummary }",
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/reputation/ips/203.0.113.10`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/reputation/payloads/:sha256",
+        description:
+          "VirusTotal last-analysis stats for a payload SHA-256. Results are cached in D1 for 24 hours.",
+        response: "{ sha256: string, reputation: ReputationSummary }",
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/reputation/payloads/${"a".repeat(64)}`
+      }
+    ],
+    notes:
+      "Requires GREYNOISE_API_KEY and VIRUSTOTAL_API_KEY Wrangler secrets. When keys are unset, endpoints return empty provider objects without error. Responses use no-store so CDN edges do not cache reputation overlays."
+  },
+  {
+    id: "hunts",
+    title: "Hunts",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/hunts",
+        description: "Public list of enabled hunt rules (name, confidence threshold, trap/protocol/tag filters).",
+        response: "{ hunts[] }",
+        cache: CACHED,
+        example: "/api/v1/hunts"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/admin/hunts",
+        description:
+          "Indexer-proxied admin API for hunt rules. Requires x-indexer-token matching INDEXER_ADMIN_TOKEN.",
+        response: "{ hunt_rules[] }",
+        cache: NO_STORE,
+        example: "/api/v1/admin/hunts"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/admin/hunts?webhooks=1",
+        description: "Indexer-proxied admin API for webhook subscriptions tied to hunt rules.",
+        response: "{ webhook_subscriptions[] }",
+        cache: NO_STORE,
+        example: "/api/v1/admin/hunts?webhooks=1"
+      }
+    ],
+    notes:
+      "POST/DELETE on the admin endpoints create, update, or remove hunt rules and webhooks. Hunt matches are delivered by the indexer worker to subscribed webhook URLs."
   },
   {
     id: "ops",
@@ -385,7 +508,7 @@ const sections: Section[] = [
           { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
         ],
         response:
-          "[{ source_ip, first_seen, last_seen, confidence, score, confidence_reasons[], unique_traps[], protocols[] }]",
+          "[{ source_ip, first_seen, last_seen, confidence, score, confidence_reasons[], unique_traps[], protocols[], country_code?, asn?, as_name? }]",
         cache: CACHED,
         example: "/api/v1/feeds/ips.json?minConfidence=60&limit=250"
       },
@@ -416,6 +539,51 @@ const sections: Section[] = [
         response: "{ type: bundle, spec_version: 2.1, objects: [indicator, …] }",
         cache: CACHED,
         example: `${BASE}/api/v1/feeds/ips.stix.json?minConfidence=70&limit=500`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/artifacts.json",
+        description:
+          "JSON array of artifact indicators: payload SHA-256 hashes, HTTP paths, and extracted domains/URLs.",
+        params: [
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "since", type: "ISO8601", description: "Only artifacts first seen at or after this timestamp." },
+          { name: "limit", type: "integer", default: "100", description: "Max IOCs (up to 5000)." },
+          { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
+        ],
+        response:
+          "[{ type: file|url|domain, value, first_seen, last_seen, confidence, event_count, unique_ips, source_ips?, size_bytes?, mime_guess? }]",
+        cache: CACHED,
+        example: "/api/v1/feeds/artifacts.json?minConfidence=60&limit=250"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/artifacts.ndjson",
+        description: "Same artifact IOC records as artifacts.json, one JSON object per line.",
+        params: [
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "since", type: "ISO8601", description: "Only artifacts first seen at or after this timestamp." },
+          { name: "limit", type: "integer", default: "100", description: "Max IOCs (up to 5000)." },
+          { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
+        ],
+        response: "application/x-ndjson — one ArtifactIoc JSON object per line",
+        cache: NO_STORE,
+        example: "/api/v1/feeds/artifacts.ndjson?minConfidence=80&limit=1000"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/artifacts.stix.json",
+        description:
+          "STIX 2.1 bundle with IP indicators, file/url/domain artifact indicators, and related-to relationships to observed source IPs.",
+        params: [
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "since", type: "ISO8601", description: "Only IOCs first seen at or after this timestamp." },
+          { name: "limit", type: "integer", default: "100", description: "Max indicators per feed (up to 5000)." },
+          { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
+        ],
+        response: "{ type: bundle, spec_version: 2.1, objects: [indicator, relationship, …] }",
+        cache: CACHED,
+        example: `${BASE}/api/v1/feeds/artifacts.stix.json?minConfidence=70&limit=500`
       },
       {
         method: "GET",
@@ -455,6 +623,43 @@ const sections: Section[] = [
     ],
     notes:
       "The live stream runs on a separate Worker bound to the same hostname. Events match the public EventRow shape."
+  },
+  {
+    id: "researcher",
+    title: "Researcher Access",
+    notes:
+      "Authenticated endpoints for trusted researchers. Requires RESEARCHER_API_TOKEN on the server. Send Authorization: Bearer <token> or x-researcher-token. All access is audit-logged. Responses use no-store caching.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/researcher/pcap/:sha256",
+        description:
+          "Download a PCAP chunk by SHA-256 when the capture is still within retention. Returns application/vnd.tcpdump (gzip-encoded when stored compressed).",
+        response: "application/vnd.tcpdump attachment, or { error: not_found }",
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/researcher/pcap/abc…def`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/researcher/payloads/:sha256",
+        description:
+          "Expanded payload view for a deduplicated hash. Returns full redacted payload bytes from R2 when retained, otherwise the longest stored preview with note: full bytes not retained.",
+        response:
+          '{ source: "r2", payload: { text?, base64?, mime_guess? } } | { preview, note: "full bytes not retained" }',
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/researcher/payloads/abc…def`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/researcher/events/:id/payload",
+        description:
+          "Redacted-safe payload for a single event. Prefers the indexed R2 object when available; falls back to the D1 preview.",
+        response:
+          '{ event_id, payload_sha256, payload_size, source: "r2"|"preview", payload|preview, note? }',
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/researcher/events/event-uuid/payload`
+      }
+    ]
   }
 ];
 
@@ -545,8 +750,9 @@ export function DocsPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>
-              All endpoints return sanitized D1 metadata only. Raw R2 objects, full PCAP bytes, signed URLs,
-              passwords, authorization tokens, cookies, and full payload bodies are never exposed.
+              All public endpoints return sanitized D1 metadata only. Raw R2 objects, full PCAP bytes,
+              signed URLs, passwords, authorization tokens, cookies, and full payload bodies are never
+              exposed without researcher authentication.
             </p>
             <p>
               Events include redacted credential flags (<code className="font-mono text-xs">has_credentials</code>),
@@ -611,6 +817,36 @@ export function DocsPage() {
               <code className="font-mono text-xs">enrich=true</code> on{" "}
               <code className="font-mono text-xs">GET /api/v1/ips/:ip</code> to fill missing fields on
               demand.
+            </p>
+            <p>
+              External reputation overlays use{" "}
+              <a
+                href="https://www.greynoise.io/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                GreyNoise Community
+              </a>{" "}
+              for IPs and{" "}
+              <a
+                href="https://www.virustotal.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                VirusTotal
+              </a>{" "}
+              for payload hashes. Configure Wrangler secrets on the Pages project:
+            </p>
+            <pre className="overflow-x-auto rounded-md bg-muted/40 p-3 font-mono text-xs leading-relaxed text-foreground/90">
+{`npx wrangler pages secret put GREYNOISE_API_KEY --project-name honeypot-sec
+npx wrangler pages secret put VIRUSTOTAL_API_KEY --project-name honeypot-sec`}
+            </pre>
+            <p>
+              Cached lookups are stored in D1 (<code className="font-mono text-xs">ip_reputation_cache</code>
+              ) with a 24-hour TTL. Reputation endpoints and <code className="font-mono text-xs">GET /api/v1/ips/:ip?reputation=true</code>{" "}
+              use <code className="font-mono text-xs">no-store</code> so CDN edges do not cache provider overlays.
             </p>
           </CardContent>
         </Card>

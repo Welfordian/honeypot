@@ -4,6 +4,7 @@ import { EventsPage } from "@/pages/events";
 import { DocsPage } from "@/pages/docs";
 import { ExportsPage } from "@/pages/exports";
 import { HealthPage } from "@/pages/health";
+import { HuntsPage } from "@/pages/hunts";
 import { ActorsPage } from "@/pages/actors";
 import { IntelPage } from "@/pages/intel";
 import { IpDetailPage } from "@/pages/ip-detail";
@@ -13,6 +14,7 @@ import { NetworkPage } from "@/pages/network";
 import { OverviewPage } from "@/pages/overview";
 import { PayloadDetailPage } from "@/pages/payload-detail";
 import { PayloadsPage } from "@/pages/payloads";
+import { NotFoundPage } from "@/pages/not-found";
 import { LegacyViewRedirect } from "@/routes";
 
 export const router = createBrowserRouter([
@@ -39,10 +41,11 @@ export const router = createBrowserRouter([
       { path: "payloads", element: <PayloadsPage /> },
       { path: "payloads/:sha256", element: <PayloadDetailPage /> },
       { path: "health", element: <HealthPage /> },
+      { path: "hunts", element: <HuntsPage /> },
       { path: "exports", element: <ExportsPage /> },
       { path: "docs", element: <DocsPage /> },
       { path: "api", element: <Navigate to="/docs" replace /> },
-      { path: "*", element: <Navigate to="/" replace /> }
+      { path: "*", element: <NotFoundPage /> }
     ]
   }
 ]);

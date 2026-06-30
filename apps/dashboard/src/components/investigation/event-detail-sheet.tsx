@@ -1,3 +1,5 @@
+import { Download } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ReasonChips } from "@/components/data/reason-chips";
 import { SeverityBadge } from "@/components/data/severity-badge";
@@ -10,6 +12,7 @@ import {
   SheetTitle
 } from "@/components/ui/sheet";
 import { buildSearchUrl } from "@/lib/investigation-links";
+import { downloadResearcherResource, getResearcherToken } from "@/lib/researcher-token";
 import { formatTime, shortHash } from "@/lib/utils";
 import type { EventRow } from "@/types/api";
 
@@ -28,6 +31,9 @@ function DetailField({ label, children }: { label: string; children: React.React
 }
 
 export function EventDetailSheet({ event, onClose }: EventDetailSheetProps) {
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const researcherToken = getResearcherToken();
+
   return (
     <Sheet open={Boolean(event)} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="overflow-y-auto">
@@ -80,6 +86,25 @@ export function EventDetailSheet({ event, onClose }: EventDetailSheetProps) {
               <ReasonChips reasons={event.confidence_reasons} linkable />
             </div>
 
+            {event.attack_techniques.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">ATT&CK techniques</h3>
+                <div className="flex flex-wrap gap-2">
+                  {event.attack_techniques.map((technique) => (
+                    <Button key={technique} variant="outline" size="sm" asChild>
+                      <a
+                        href={`https://attack.mitre.org/techniques/${technique.replace(".", "/")}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {technique}
+                      </a>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {event.tags.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Tags</h3>
@@ -99,8 +124,38 @@ export function EventDetailSheet({ event, onClose }: EventDetailSheetProps) {
               <DetailField label="Packets">{event.packet_count}</DetailField>
               <DetailField label="Bytes">{event.byte_count}</DetailField>
               <DetailField label="TCP flags">{event.tcp_flags || "—"}</DetailField>
-              <DetailField label="PCAP">{event.pcap_available ? "Available" : "None"}</DetailField>
+              <DetailField label="PCAP">
+                {event.pcap_available ? (
+                  event.pcap_sha256 && researcherToken ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => {
+                        setDownloadError(null);
+                        void downloadResearcherResource(
+                          `/api/v1/researcher/pcap/${event.pcap_sha256}`,
+                          `${event.pcap_sha256}.pcap`
+                        ).catch((error: unknown) => {
+                          setDownloadError(
+                            error instanceof Error ? error.message : "PCAP download failed."
+                          );
+                        });
+                      }}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download PCAP
+                    </Button>
+                  ) : (
+                    "Available (set researcher token in Exports)"
+                  )
+                ) : (
+                  "None"
+                )}
+              </DetailField>
             </div>
+
+            {downloadError && <p className="text-xs text-destructive">{downloadError}</p>}
 
             {event.credential_kind && (
               <DetailField label="Credential kind">{event.credential_kind}</DetailField>

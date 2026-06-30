@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { buildStixBundle, stixDeterministicId, stixIpPattern } from "./stixBundle";
+import type { AttackTechnique } from "./attackMapping";
+import type { ArtifactIoc } from "./artifactIocs";
 import type { IpIoc } from "./ipIocs";
+import {
+  buildAttackStixBundle,
+  buildRichStixBundle,
+  buildStixBundle,
+  stixAttackPatternFromTechnique,
+  stixDeterministicId,
+  stixDomainPattern,
+  stixFilePattern,
+  stixIpPattern,
+  stixUrlPattern,
+  type StixIndicator
+} from "./stixBundle";
 
 describe("STIX bundle builder", () => {
   const sample: IpIoc = {
@@ -11,7 +24,21 @@ describe("STIX bundle builder", () => {
     score: 8,
     confidence_reasons: ["credential_attempt", "multi_trap"],
     unique_traps: ["env", "admin"],
-    protocols: ["http"]
+    protocols: ["http"],
+    country_code: "US",
+    asn: 15169,
+    as_name: "Google LLC"
+  };
+
+  const artifact: ArtifactIoc = {
+    type: "file",
+    value: "a".repeat(64),
+    first_seen: "2026-06-29T11:00:00.000Z",
+    last_seen: "2026-06-30T11:00:00.000Z",
+    confidence: 75,
+    event_count: 3,
+    unique_ips: 1,
+    source_ips: ["203.0.113.10"]
   };
 
   it("builds a STIX 2.1 bundle with ipv4 indicators", () => {
@@ -22,8 +49,9 @@ describe("STIX bundle builder", () => {
     expect(bundle.id).toMatch(/^bundle--[0-9a-f-]{36}$/);
     expect(bundle.objects).toHaveLength(1);
 
-    const indicator = bundle.objects[0]!;
-    expect(indicator.type).toBe("indicator");
+    const indicator = bundle.objects[0];
+    expect(indicator?.type).toBe("indicator");
+    if (!indicator || indicator.type !== "indicator") return;
     expect(indicator.spec_version).toBe("2.1");
     expect(indicator.pattern).toBe("[ipv4-addr:value = '203.0.113.10']");
     expect(indicator.pattern_type).toBe("stix");
@@ -33,12 +61,39 @@ describe("STIX bundle builder", () => {
     expect(indicator.labels).toEqual([
       "confidence:85",
       "reason:credential_attempt",
-      "reason:multi_trap"
+      "reason:multi_trap",
+      "country:US",
+      "asn:15169",
+      "as_name:Google LLC"
     ]);
   });
 
   it("uses ipv6 patterns for IPv6 addresses", () => {
     expect(stixIpPattern("2001:db8::1")).toBe("[ipv6-addr:value = '2001:db8::1']");
+  });
+
+  it("builds artifact patterns", () => {
+    expect(stixFilePattern("a".repeat(64))).toBe(`[file:hashes.'SHA-256' = '${"a".repeat(64)}']`);
+    expect(stixUrlPattern("https://evil.example/x")).toBe("[url:value = 'https://evil.example/x']");
+    expect(stixDomainPattern("evil.example")).toBe("[domain-name:value = 'evil.example']");
+  });
+
+  it("builds rich bundles with relationships to observed IPs", () => {
+    const bundle = buildRichStixBundle({
+      ips: [sample],
+      artifacts: [artifact],
+      generatedAt: "2026-06-30T15:00:00.000Z"
+    });
+
+    expect(bundle.objects).toHaveLength(3);
+    const indicators = bundle.objects.filter((object) => object.type === "indicator");
+    const relationships = bundle.objects.filter((object) => object.type === "relationship");
+    expect(indicators).toHaveLength(2);
+    expect(relationships).toHaveLength(1);
+    expect(relationships[0]).toMatchObject({
+      relationship_type: "related-to",
+      description: "Artifact observed from honeypot source IP 203.0.113.10"
+    });
   });
 
   it("generates stable indicator ids per IP", () => {
@@ -49,5 +104,43 @@ describe("STIX bundle builder", () => {
     expect(first).toBe(second);
     expect(first).not.toBe(other);
     expect(first).toMatch(/^indicator--[0-9a-f-]{36}$/);
+  });
+
+  it("builds attack-pattern objects from ATT&CK techniques", () => {
+    const technique: AttackTechnique = {
+      id: "T1190",
+      name: "Exploit Public-Facing Application",
+      tactic: "initial-access",
+      url: "https://attack.mitre.org/techniques/T1190/"
+    };
+
+    const pattern = stixAttackPatternFromTechnique(technique);
+    expect(pattern.type).toBe("attack-pattern");
+    expect(pattern.name).toBe(technique.name);
+    expect(pattern.external_references[0]).toMatchObject({
+      source_name: "mitre-attack",
+      external_id: "T1190",
+      url: technique.url
+    });
+    expect(pattern.kill_chain_phases[0]).toMatchObject({
+      kill_chain_name: "mitre-attack",
+      phase_name: "initial-access"
+    });
+  });
+
+  it("builds mixed attack-pattern and indicator bundles", () => {
+    const technique: AttackTechnique = {
+      id: "T1110.001",
+      name: "Brute Force: Password Guessing",
+      tactic: "credential-access",
+      url: "https://attack.mitre.org/techniques/T1110/001/"
+    };
+    const ipBundle = buildStixBundle([sample]);
+    const indicators = ipBundle.objects.filter((object): object is StixIndicator => object.type === "indicator");
+    const bundle = buildAttackStixBundle([technique], indicators);
+
+    expect(bundle.objects).toHaveLength(2);
+    expect(bundle.objects[0]?.type).toBe("attack-pattern");
+    expect(bundle.objects[1]?.type).toBe("indicator");
   });
 });

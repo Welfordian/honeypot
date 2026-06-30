@@ -1,57 +1,62 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://dashboard.example.com/</loc>
+    <loc>https://pot.welford.me/</loc>
     <changefreq>hourly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/intel</loc>
+    <loc>https://pot.welford.me/intel</loc>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/live</loc>
+    <loc>https://pot.welford.me/live</loc>
     <changefreq>always</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/actors</loc>
+    <loc>https://pot.welford.me/actors</loc>
     <changefreq>hourly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/search</loc>
+    <loc>https://pot.welford.me/search</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/network</loc>
+    <loc>https://pot.welford.me/network</loc>
     <changefreq>hourly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/ips</loc>
+    <loc>https://pot.welford.me/ips</loc>
     <changefreq>hourly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/payloads</loc>
+    <loc>https://pot.welford.me/payloads</loc>
     <changefreq>hourly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/health</loc>
+    <loc>https://pot.welford.me/health</loc>
     <changefreq>hourly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/exports</loc>
+    <loc>https://pot.welford.me/exports</loc>
     <changefreq>daily</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://dashboard.example.com/docs</loc>
+    <loc>https://pot.welford.me/hunts</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://pot.welford.me/docs</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

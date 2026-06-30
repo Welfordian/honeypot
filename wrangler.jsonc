@@ -5,7 +5,8 @@
   "compatibility_date": "2026-06-29",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "PUBLIC_SITE_ORIGIN": "https://dashboard.example.com"
+    "PUBLIC_SITE_ORIGIN": "https://pot.welford.me",
+    "SUPPRESSED_SOURCE_IPS": "203.0.113.10"
   },
   "r2_buckets": [
     {
@@ -24,7 +25,8 @@
   "env": {
     "production": {
       "vars": {
-        "PUBLIC_SITE_ORIGIN": "https://dashboard.example.com"
+        "PUBLIC_SITE_ORIGIN": "https://pot.welford.me",
+        "SUPPRESSED_SOURCE_IPS": "203.0.113.10"
       },
       "r2_buckets": [
         {

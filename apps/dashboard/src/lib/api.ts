@@ -5,20 +5,22 @@ function apiPath(path: string): string {
 }
 
 export interface ApiClient {
-  get<T>(path: string): Promise<T>;
+  get<T>(path: string, headers?: Record<string, string>): Promise<T>;
   download(path: string, filename: string): Promise<void>;
+  post<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T>;
+  delete<T>(path: string, headers?: Record<string, string>): Promise<T>;
 }
 
 export function liveStreamUrl(path = "/api/live-stream"): string {
-  const origin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
+  const origin = typeof window === "undefined" ? "https://dashboard.example.com" : window.location.origin;
   const url = new URL(apiPath(path), origin);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 }
 
 export function createApiClient(): ApiClient {
-  async function request(path: string): Promise<Response> {
-    const response = await fetch(apiPath(path));
+  async function request(path: string, init: RequestInit = {}): Promise<Response> {
+    const response = await fetch(apiPath(path), init);
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`${response.status} ${detail}`);
@@ -27,8 +29,28 @@ export function createApiClient(): ApiClient {
   }
 
   return {
-    async get<T>(path: string): Promise<T> {
-      return (await request(path)).json() as Promise<T>;
+    async get<T>(path: string, headers: Record<string, string> = {}): Promise<T> {
+      return (await request(path, { headers })).json() as Promise<T>;
+    },
+    async post<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
+      const response = await fetch(apiPath(path), {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`${response.status} ${detail}`);
+      }
+      return response.json() as Promise<T>;
+    },
+    async delete<T>(path: string, headers: Record<string, string> = {}): Promise<T> {
+      const response = await fetch(apiPath(path), { method: "DELETE", headers });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`${response.status} ${detail}`);
+      }
+      return response.json() as Promise<T>;
     },
     async download(path: string, filename: string): Promise<void> {
       const blob = await (await request(path)).blob();

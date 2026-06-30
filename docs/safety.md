@@ -34,7 +34,7 @@ The host network capture service runs outside Docker so it can observe `enp1s0` 
 
 ## Public dashboard posture
 
-`dashboard.example.com` is public. It should expose only:
+The public dashboard (e.g. `https://dashboard.example.com`) should expose only:
 
 - source IP
 - protocol/trap/event type

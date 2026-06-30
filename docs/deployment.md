@@ -25,11 +25,39 @@ npx wrangler pages deploy apps/dashboard/dist --project-name honeypot-sec --bran
 
 Configure:
 
-- `dashboard.example.com` as the Cloudflare Pages custom domain.
-- `legacy-dashboard.example.com` as a legacy redirect to `dashboard.example.com`.
-- `honeypot.example.com` DNS A/AAAA record to the VPS.
+- Your dashboard hostname (e.g. `dashboard.example.com`) as the Cloudflare Pages custom domain.
+- Optionally, a legacy hostname (e.g. `legacy-dashboard.example.com`) redirecting to the canonical dashboard URL.
+- Honeypot VPS DNS A/AAAA record to the trap host (decoy services only).
 - R2 event notifications to the `honeypot-r2-events` queue if Wrangler does not create them automatically.
 - PCAP chunks remain under the private `private-pcap/` R2 prefix and expire after 14 days via the indexer cron.
+
+### Pages / dashboard secrets
+
+Set on the Pages project (`honeypot-sec`) or via `wrangler pages secret put`:
+
+```sh
+npx wrangler pages secret put RESEARCHER_API_TOKEN --project-name honeypot-sec
+npx wrangler pages secret put INDEXER_URL --project-name honeypot-sec   # e.g. https://honeypot-r2-indexer.<account>.workers.dev
+npx wrangler pages secret put INDEXER_ADMIN_TOKEN --project-name honeypot-sec
+# Optional reputation providers:
+npx wrangler pages secret put GREYNOISE_API_KEY --project-name honeypot-sec
+npx wrangler pages secret put VIRUSTOTAL_API_KEY --project-name honeypot-sec
+```
+
+Set `PUBLIC_SITE_ORIGIN` in root `wrangler.jsonc` to your dashboard URL (e.g. `https://dashboard.example.com`) for canonical URLs in exports and feeds.
+Set `SUPPRESSED_SOURCE_IPS` in both Pages and indexer Wrangler configs before deployment so suppressed sources are excluded from ingest, capture metadata, and researcher-access audit logs.
+
+### Indexer secrets
+
+Use the same `INGEST_HMAC_SECRET` value as the VPS `.env` so signed ingest from `r2-writer` and host capture validates on the indexer Worker.
+
+```sh
+npx wrangler secret put INGEST_HMAC_SECRET -c apps/cloudflare-indexer/wrangler.jsonc
+npx wrangler secret put IPINFO_TOKEN -c apps/cloudflare-indexer/wrangler.jsonc
+npx wrangler secret put INDEXER_ADMIN_TOKEN -c apps/cloudflare-indexer/wrangler.jsonc
+```
+
+Apply D1 migrations through `0008_webhook_index.sql` on remote before enabling researcher endpoints.
 
 ### IPinfo MMDB bootstrap
 
@@ -94,8 +122,11 @@ Deploy:
 
 ```sh
 docker compose up -d --build
+sudo ./scripts/install-firewall.sh
 ./scripts/verify-safety.sh
 ```
+
+`install-firewall.sh` installs `DOCKER-USER` egress deny rules and suppressed-source `INPUT` drops after Compose has created the honeypot Docker networks.
 
 Install host-wide network capture after the Docker stack is healthy:
 
@@ -125,14 +156,11 @@ docker compose --profile cowrie up -d --build
 
 ## Acceptance Checks
 
-- `curl http://honeypot.example.com/` returns the DesktopC decoy website.
-- `curl http://honeypot.example.com/.env` returns a decoy config response and creates an R2 object.
-- `nc honeypot.example.com 21` returns an FTP banner and creates an R2 object.
-- Cloudflare indexer writes new R2 events into D1.
-- `https://dashboard.example.com/api/live` shows recent sanitized events.
-- `https://dashboard.example.com` shows live attacks, search, IP drilldowns, and exports.
+- Honeypot decoy HTTP/HTTPS responds on the VPS public hostname.
+- `curl https://dashboard.example.com/api/live` shows recent sanitized events.
+- `https://dashboard.example.com` shows live attacks, search (including HTTP path filter), IP drilldowns, and exports.
 - Public dashboard responses never include raw passwords, authorization headers, cookies, or R2 object keys.
-- `ssh -p 22222 root@203.0.113.20` remains reachable after capture rules are installed.
-- `203.0.113.10` is excluded by tcpdump BPF, raw-table metadata rules, local app checks, and Cloudflare ingest suppression.
+- `ssh -p 22222` on the VPS admin port remains reachable after capture rules are installed.
+- Suppressed source IPs are excluded by tcpdump BPF, raw-table metadata rules, local app checks, and Cloudflare ingest suppression.
 - UDP DNS replies from the VPS resolver are filtered from host capture metadata and PCAP to avoid logging the honeypot's own outbound ingest lookups as inbound attacks.
 - `https://dashboard.example.com/api/v1/network` shows network metadata, and `https://dashboard.example.com/api/exports/network.csv` contains no R2 keys or raw PCAP bytes.

@@ -5,5 +5,5 @@
     "lib": ["ES2022", "WebWorker"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "../../functions/_lib/enrichment.ts", "../../functions/_lib/ipinfoMmdb.ts"]
+  "include": ["src/**/*.ts", "../../functions/_lib/enrichment.ts", "../../functions/_lib/huntMatch.ts", "../../functions/_lib/ipinfoMmdb.ts", "../../functions/_lib/redaction.ts", "../../functions/_lib/webhookUrl.ts"]
 }

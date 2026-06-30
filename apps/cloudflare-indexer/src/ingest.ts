@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Env, StoredR2Event } from "./types.js";
+import { deliverHuntWebhooks } from "./deliverHunts.js";
 import { indexStoredEvent } from "./indexEvent.js";
 import { publishLiveEvent } from "./live.js";
 
@@ -460,7 +461,15 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
     });
 
     try {
-      await publishLiveEvent(env, await indexStoredEvent(env.DB, stored, key, env.EVENTS_BUCKET));
+      const indexed = await indexStoredEvent(env.DB, stored, key, env.EVENTS_BUCKET);
+      if (indexed) {
+        await publishLiveEvent(env, indexed);
+        try {
+          await deliverHuntWebhooks(env);
+        } catch (error) {
+          console.error("hunt webhook delivery failed", error);
+        }
+      }
     } catch (error) {
       console.error("direct D1 index failed; queue notification will retry", { key, error });
     }

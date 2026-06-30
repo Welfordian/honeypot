@@ -27,6 +27,7 @@ export interface EventRow {
   severity: number;
   confidence: number;
   confidence_reasons: string[];
+  attack_techniques: string[];
   tags: string[];
 }
 
@@ -42,6 +43,35 @@ export interface IpProfile {
   confidence_reasons: string[];
   last_trap?: string | null;
   last_protocol?: string | null;
+  country_code?: string | null;
+  asn?: number | null;
+  as_name?: string | null;
+}
+
+export type ArtifactIocType = "file" | "url" | "domain";
+
+export interface ArtifactIoc {
+  type: ArtifactIocType;
+  value: string;
+  first_seen: string;
+  last_seen: string;
+  confidence: number;
+  event_count: number;
+  unique_ips: number;
+  source_ips?: string[];
+  size_bytes?: number;
+  mime_guess?: string;
+}
+
+export interface IpIoc {
+  source_ip: string;
+  first_seen: string;
+  last_seen: string;
+  confidence: number;
+  score: number;
+  confidence_reasons: string[];
+  unique_traps: string[];
+  protocols: string[];
   country_code?: string | null;
   asn?: number | null;
   as_name?: string | null;
@@ -129,6 +159,37 @@ export interface IpDetail {
   profile: IpProfile;
   events: EventRow[];
   next_cursor: string | null;
+  reputation?: ReputationSummary;
+}
+
+export interface GreynoiseReputation {
+  classification: string | null;
+  name?: string | null;
+  tags: string[];
+}
+
+export interface VirusTotalReputation {
+  malicious: number;
+  suspicious: number;
+  harmless: number;
+  undetected: number;
+}
+
+export interface ReputationSummary {
+  providers: {
+    greynoise?: GreynoiseReputation;
+    virustotal?: VirusTotalReputation;
+  };
+}
+
+export interface IpReputationResponse {
+  ip: string;
+  reputation: ReputationSummary;
+}
+
+export interface PayloadReputationResponse {
+  sha256: string;
+  reputation: ReputationSummary;
 }
 
 export type LiveStatus = "connecting" | "live" | "reconnecting" | "offline";
@@ -154,6 +215,7 @@ export interface EventFilters {
   payloadHash: string;
   trap: string;
   userAgent: string;
+  httpPath: string;
 }
 
 export const CONFIDENCE_REASONS = [
@@ -185,7 +247,8 @@ export const DEFAULT_EVENT_FILTERS: EventFilters = {
   hasCredentials: "",
   payloadHash: "",
   trap: "",
-  userAgent: ""
+  userAgent: "",
+  httpPath: ""
 };
 
 export type SensorStatus = "ok" | "warning" | "stale";
@@ -262,6 +325,27 @@ export interface IntelCampaigns {
   behavioral_campaigns: BehavioralCampaign[];
 }
 
+export interface AttackTechniqueExampleEvent {
+  id: string;
+  source_ip: string;
+  occurred_at: string;
+}
+
+export interface AttackTechniqueRow {
+  id: string;
+  name: string;
+  tactic: string;
+  url: string;
+  count: number;
+  example_events: AttackTechniqueExampleEvent[];
+  example_ips: string[];
+}
+
+export interface AttackTechniquesResponse {
+  sinceHours: number;
+  techniques: AttackTechniqueRow[];
+}
+
 export interface OpsSensor {
   sensor_id: string;
   last_seen: string;
@@ -323,4 +407,41 @@ export interface NewIpsResponse {
   since: string;
   count: number;
   ips: IpProfile[];
+}
+
+export interface HuntRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  min_confidence: number;
+  trap: string | null;
+  protocol: string | null;
+  tag: string | null;
+  has_credentials: boolean | null;
+  cursor_occurred_at?: string | null;
+  cursor_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PublicHuntRule {
+  id: string;
+  name: string;
+  min_confidence: number;
+  trap: string | null;
+  protocol: string | null;
+  tag: string | null;
+  has_credentials: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  hunt_rule_id: string;
+  url: string;
+  enabled: boolean;
+  last_delivered_at: string | null;
+  last_error: string | null;
+  created_at: string;
 }

@@ -151,6 +151,13 @@ export function EventsPage() {
             onChange={(e) => setFilters({ ...filters, userAgent: e.target.value })}
             className="w-full sm:w-52"
           />
+          <Input
+            aria-label="HTTP path"
+            placeholder="HTTP path"
+            value={filters.httpPath}
+            onChange={(e) => setFilters({ ...filters, httpPath: e.target.value })}
+            className="w-full sm:w-52 font-mono text-xs"
+          />
           <Select
             value={filters.aggregate || "both"}
             onValueChange={(v) =>

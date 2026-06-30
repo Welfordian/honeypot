@@ -10,6 +10,9 @@ export interface IpProfileRow {
   confidence_reasons_json: string;
   unique_traps_json: string;
   protocols_json: string;
+  country_code?: string | null;
+  asn?: number | null;
+  as_name?: string | null;
 }
 
 export interface IpIoc {
@@ -21,6 +24,9 @@ export interface IpIoc {
   confidence_reasons: string[];
   unique_traps: string[];
   protocols: string[];
+  country_code?: string | null;
+  asn?: number | null;
+  as_name?: string | null;
 }
 
 export interface IpIocsQuery {
@@ -36,7 +42,7 @@ export interface IpIocsQueryOptions {
 }
 
 export function publicIpIoc(row: IpProfileRow): IpIoc {
-  return {
+  const ioc: IpIoc = {
     source_ip: row.source_ip,
     first_seen: row.first_seen,
     last_seen: row.last_seen,
@@ -46,6 +52,12 @@ export function publicIpIoc(row: IpProfileRow): IpIoc {
     unique_traps: parseJsonList(row.unique_traps_json),
     protocols: parseJsonList(row.protocols_json)
   };
+
+  if (row.country_code != null) ioc.country_code = row.country_code;
+  if (row.asn != null) ioc.asn = row.asn;
+  if (row.as_name != null) ioc.as_name = row.as_name;
+
+  return ioc;
 }
 
 export function buildIpIocsQuery(url: URL, options?: IpIocsQueryOptions): IpIocsQuery | Response {
@@ -79,7 +91,7 @@ export function buildIpIocsQuery(url: URL, options?: IpIocsQueryOptions): IpIocs
 
   return {
     sql: `SELECT source_ip, first_seen, last_seen, score, confidence, confidence_reasons_json,
-       unique_traps_json, protocols_json
+       unique_traps_json, protocols_json, country_code, asn, as_name
      FROM ip_profiles
      ${whereClause}
      ORDER BY confidence DESC, score DESC, last_seen DESC

@@ -5,6 +5,11 @@ function escapeControlCharacters(value: string): string {
 export function redactPreview(value: string | null | undefined): string {
   if (!value) return "";
   let redacted = value.replace(/([A-Za-z0-9_ -]{0,32}(?:password|passwd|secret|token|key)[A-Za-z0-9_ -]{0,32})=([^&\s]+)/gi, "$1=[redacted]");
+  redacted = redacted.replace(/Authorization:\s*Bearer\s+[^\s'"]+/gi, "Authorization: Bearer [redacted]");
+  redacted = redacted.replace(/Authorization:\s*Basic\s+[^\s'"]+/gi, "Authorization: Basic [redacted]");
+  redacted = redacted.replace(/\bBearer\s+[^\s'"]+/gi, "Bearer [redacted]");
+  redacted = redacted.replace(/\bBasic\s+[A-Za-z0-9+/=]{8,}\b/g, "Basic [redacted]");
+
   const marker = "login attempt [";
   let lower = redacted.toLowerCase();
   let markerIndex = lower.indexOf(marker);
@@ -20,7 +25,9 @@ export function redactPreview(value: string | null | undefined): string {
       lower = redacted.toLowerCase();
       markerIndex = lower.indexOf(marker, valueStart + "[redacted]/[redacted]".length);
     } else {
-      markerIndex = lower.indexOf(marker, valueEnd + 1);
+      redacted = `${redacted.slice(0, valueStart)}[redacted]${redacted.slice(valueEnd)}`;
+      lower = redacted.toLowerCase();
+      markerIndex = lower.indexOf(marker, valueStart + "[redacted]".length);
     }
   }
 
