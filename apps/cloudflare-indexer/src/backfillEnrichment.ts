@@ -1,4 +1,8 @@
-import { enrichIpProfile } from "../../../functions/_lib/enrichment.js";
+import {
+  enrichIpProfile,
+  isEnrichablePublicIp,
+  markEnrichmentUnavailable
+} from "../../../functions/_lib/enrichment.js";
 import type { Env } from "./types.js";
 
 export async function backfillEnrichment(
@@ -16,6 +20,11 @@ export async function backfillEnrichment(
 
   for (const row of rows.results) {
     try {
+      if (!isEnrichablePublicIp(row.source_ip)) {
+        await markEnrichmentUnavailable(env.DB, row.source_ip);
+        continue;
+      }
+
       const result = await enrichIpProfile(env.DB, row.source_ip, { bucket: env.EVENTS_BUCKET });
       if (result) enriched += 1;
       else failed += 1;

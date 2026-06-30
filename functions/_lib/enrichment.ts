@@ -127,6 +127,14 @@ export function enrichmentFromRow(row: {
   };
 }
 
+export async function markEnrichmentUnavailable(db: D1Database, ip: string): Promise<IpEnrichmentFields> {
+  await db
+    .prepare("UPDATE ip_profiles SET as_name = '' WHERE source_ip = ?")
+    .bind(ip)
+    .run();
+  return { country_code: null, asn: null, as_name: "" };
+}
+
 function resolveFetcher(
   bucket: MmdbBucket | undefined,
   fetcher: EnrichmentFetcher | undefined
@@ -156,11 +164,7 @@ export async function enrichIpProfile(
 
   const fetched = await fetcher(ip);
   if (!fetched) {
-    await db
-      .prepare("UPDATE ip_profiles SET as_name = '' WHERE source_ip = ?")
-      .bind(ip)
-      .run();
-    return { country_code: null, asn: null, as_name: "" };
+    return markEnrichmentUnavailable(db, ip);
   }
 
   await db
