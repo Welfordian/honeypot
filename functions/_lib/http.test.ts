@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cachedJson, parseEventCursor, publicIp, publicSha256 } from "./http";
+import { cachedJson, parseEventCursor, parseSinceIso, publicIp, publicSha256 } from "./http";
 
 describe("public API helpers", () => {
   it("validates public IP and SHA-256 route params", () => {
@@ -22,5 +22,11 @@ describe("public API helpers", () => {
     });
     expect(parseEventCursor("bad|event-1")).toBeInstanceOf(Response);
     expect(parseEventCursor("2026-06-29T12:00:00.000Z|bad id")).toBeInstanceOf(Response);
+  });
+
+  it("requires a valid since timestamp for delta feeds", () => {
+    expect(parseSinceIso("2026-06-29T12:00:00.000Z")).toBe("2026-06-29T12:00:00.000Z");
+    expect(parseSinceIso(null)).toBeInstanceOf(Response);
+    expect(parseSinceIso("not-a-date")).toBeInstanceOf(Response);
   });
 });

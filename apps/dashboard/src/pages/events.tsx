@@ -1,4 +1,4 @@
-import { Filter, Search } from "lucide-react";
+import { Download, Filter, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { EventsTable } from "@/components/data/events-table";
@@ -17,10 +17,12 @@ import {
 import { useEventInspector } from "@/hooks/use-event-inspector";
 import {
   DEFAULT_EVENT_FILTERS,
+  buildEventParams,
   useEvents,
   type EventFilters
 } from "@/hooks/use-queries";
 import { filtersFromSearchParams, searchParamsFromFilters } from "@/lib/investigation-links";
+import { api } from "@/lib/api";
 import { CONFIDENCE_REASONS } from "@/types/api";
 
 export function EventsPage() {
@@ -40,6 +42,12 @@ export function EventsPage() {
 
   const applyFilters = () => {
     setSearchParams(searchParamsFromFilters(filters), { replace: true });
+  };
+
+  const exportResults = () => {
+    const params = buildEventParams(appliedFilters);
+    params.delete("limit");
+    void api.download(`/api/v1/feeds/search-export.json?${params.toString()}`, "honeypot-search-export.json");
   };
 
   return (
@@ -136,6 +144,13 @@ export function EventsPage() {
             onChange={(e) => setFilters({ ...filters, payloadHash: e.target.value })}
             className="w-full sm:w-44 font-mono text-xs"
           />
+          <Input
+            aria-label="User agent"
+            placeholder="User agent"
+            value={filters.userAgent}
+            onChange={(e) => setFilters({ ...filters, userAgent: e.target.value })}
+            className="w-full sm:w-52"
+          />
           <Select
             value={filters.aggregate || "both"}
             onValueChange={(v) =>
@@ -161,6 +176,10 @@ export function EventsPage() {
           <Button onClick={applyFilters}>
             <Search className="h-4 w-4" />
             Search
+          </Button>
+          <Button variant="outline" onClick={exportResults}>
+            <Download className="h-4 w-4" />
+            Export results
           </Button>
           <Button
             variant="outline"

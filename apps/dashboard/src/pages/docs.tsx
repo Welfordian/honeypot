@@ -245,8 +245,78 @@ const sections: Section[] = [
     ]
   },
   {
+    id: "analytics",
+    title: "Analytics & Feeds",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/analytics/rollups",
+        description: "Pre-aggregated time-series rollups from the indexer (analytics_rollups table).",
+        params: [
+          { name: "sinceHours", type: "integer", default: "168", description: "Lookback window (1–720 hours)." },
+          { name: "bucketWidth", type: "enum", default: "hour", description: "hour or day bucket size." },
+          {
+            name: "dimension",
+            type: "enum",
+            default: "protocol",
+            description: "protocol, trap, event_kind, severity, destination_port, or tcp_flags."
+          }
+        ],
+        response: "{ dimension, bucketWidth, sinceHours, series: [{ key, points: [{ bucket, count, unique_ips }] }] }",
+        cache: CACHED,
+        example: `${BASE}/api/v1/analytics/rollups?sinceHours=168&bucketWidth=hour&dimension=protocol`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/analytics/compare",
+        description: "Compare event counts for a tag, confidence reason, or trap across two lookback windows.",
+        params: [
+          { name: "dimension", type: "enum", default: "tag", description: "tag, confidenceReason, or trap." },
+          { name: "key", type: "token", description: "Tag value, confidence reason, or trap name." },
+          { name: "hoursA", type: "integer", default: "24", description: "Shorter window (1–720 hours)." },
+          { name: "hoursB", type: "integer", default: "168", description: "Longer window (1–720 hours)." }
+        ],
+        response: "{ dimension, key, windowA: { hours, count }, windowB: { hours, count } }",
+        cache: CACHED,
+        example: `${BASE}/api/v1/analytics/compare?dimension=tag&key=login&hoursA=24&hoursB=168`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/search-export.json",
+        description: "Bulk JSON download of the current event search (same filters as /api/v1/events, up to 5000 rows).",
+        params: [
+          { name: "ip", type: "string", description: "Filter by source IP." },
+          { name: "eventType", type: "token", description: "Match protocol, trap, or event_kind." },
+          { name: "eventKind", type: "token", description: "Exact event_kind filter." },
+          { name: "destinationPort", type: "integer", description: "Destination port (0–65535)." },
+          { name: "aggregate", type: "boolean", description: '"true" or "false" for is_aggregate.' },
+          { name: "sinceHours", type: "integer", default: "24", description: "Lookback window (1–720 hours)." },
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "hasCredentials", type: "boolean", description: '"true" for credential-attempt events.' },
+          { name: "tag", type: "token", description: "Filter by tag value." },
+          { name: "confidenceReason", type: "token", description: "Filter by confidence reason." },
+          { name: "payloadHash", type: "sha256", description: "Filter by payload SHA-256." }
+        ],
+        response: 'attachment: { exported_at, limit: 5000, count, events: EventRow[] }',
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/feeds/search-export.json?tag=login&sinceHours=168`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/new-ips.json",
+        description: "IP profiles whose first_seen is on or after the given ISO8601 timestamp.",
+        params: [
+          { name: "since", type: "ISO8601", description: "Required. Return IPs first seen at or after this time." }
+        ],
+        response: "{ since, count, ips: IpProfile[] }",
+        cache: CACHED,
+        example: `${BASE}/api/v1/feeds/new-ips.json?since=2026-06-01T00:00:00.000Z`
+      }
+    ]
+  },
+  {
     id: "exports",
-    title: "Exports",
+    title: "Exports & Feeds",
     endpoints: [
       {
         method: "GET",
@@ -271,6 +341,94 @@ const sections: Section[] = [
         response: "text/csv — occurred_at, source_ip, ports, protocol, event_kind, trap, packet/byte counts, tcp_flags, is_aggregate, pcap_sha256",
         cache: NO_STORE,
         example: `${BASE}/api/exports/network.csv?sinceHours=48`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/events.ndjson",
+        description: "Machine-consumable event stream as newline-delimited JSON (one EventRow per line).",
+        params: [
+          { name: "ip", type: "string", description: "Filter by source IP (IPv4/IPv6)." },
+          { name: "eventType", type: "token", description: "Match protocol, trap, or event_kind." },
+          { name: "eventKind", type: "token", description: "Exact event_kind filter." },
+          { name: "destinationPort", type: "integer", description: "Destination port (0–65535)." },
+          { name: "aggregate", type: "boolean", description: '"true" or "false" for is_aggregate.' },
+          { name: "sinceHours", type: "integer", default: "24", description: "Lookback window (1–720 hours)." },
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "hasCredentials", type: "boolean", description: '"true" for credential-attempt events.' },
+          { name: "tag", type: "token", description: "Filter by tag value." },
+          {
+            name: "confidenceReason",
+            type: "token",
+            description: `Confidence reason (${CONFIDENCE_REASONS.slice(0, 4).join(", ")}, …).`
+          },
+          { name: "payloadHash", type: "sha256", description: "Filter by payload SHA-256." },
+          { name: "limit", type: "integer", default: "1000", description: "Max lines (up to 5000)." }
+        ],
+        response: "application/x-ndjson — one EventRow JSON object per line",
+        cache: NO_STORE,
+        example: `${BASE}/api/v1/feeds/events.ndjson?minConfidence=70&sinceHours=48&limit=2000`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/ips.json",
+        description: "JSON array of IP indicators with confidence metadata for SIEM/TIP ingestion.",
+        params: [
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "since", type: "ISO8601", description: "Only IPs first seen at or after this timestamp." },
+          { name: "limit", type: "integer", default: "100", description: "Max IOCs (up to 5000)." },
+          { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
+        ],
+        response:
+          "[{ source_ip, first_seen, last_seen, confidence, score, confidence_reasons[], unique_traps[], protocols[] }]",
+        cache: CACHED,
+        example: "/api/v1/feeds/ips.json?minConfidence=60&limit=250"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/ips.ndjson",
+        description: "Same IP IOC records as ips.json, one JSON object per line.",
+        params: [
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "since", type: "ISO8601", description: "Only IPs first seen at or after this timestamp." },
+          { name: "limit", type: "integer", default: "100", description: "Max IOCs (up to 5000)." },
+          { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
+        ],
+        response: "application/x-ndjson — one IpIoc JSON object per line",
+        cache: NO_STORE,
+        example: "/api/v1/feeds/ips.ndjson?minConfidence=80&limit=1000"
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/ips.stix.json",
+        description: "STIX 2.1 bundle of ipv4-addr/ipv6-addr indicators with confidence labels and valid_from/valid_until.",
+        params: [
+          { name: "minConfidence", type: "integer", description: "Minimum confidence score (0–100)." },
+          { name: "since", type: "ISO8601", description: "Only IPs first seen at or after this timestamp." },
+          { name: "limit", type: "integer", default: "100", description: "Max indicators (up to 5000)." },
+          { name: "offset", type: "integer", default: "0", description: "Pagination offset." }
+        ],
+        response: "{ type: bundle, spec_version: 2.1, objects: [indicator, …] }",
+        cache: CACHED,
+        example: `${BASE}/api/v1/feeds/ips.stix.json?minConfidence=70&limit=500`
+      },
+      {
+        method: "GET",
+        path: "/api/v1/feeds/new.json",
+        description:
+          "Delta feed of newly observed high-confidence IPs (first_seen) and events (occurred_at) since a timestamp.",
+        params: [
+          { name: "since", type: "ISO8601", description: "Required. Return records at or after this timestamp." },
+          {
+            name: "minConfidence",
+            type: "integer",
+            default: "50",
+            description: "Minimum confidence score (0–100)."
+          },
+          { name: "limit", type: "integer", default: "500", description: "Max IPs and max events each (up to 5000)." }
+        ],
+        response: "{ since, min_confidence, ips: IpIoc[], events: EventRow[] }",
+        cache: CACHED,
+        example: `${BASE}/api/v1/feeds/new.json?since=2026-06-29T00:00:00.000Z`
       }
     ]
   },
@@ -411,7 +569,7 @@ export function DocsPage() {
             <p>
               Most <code className="font-mono text-xs">/api/v1/*</code> JSON endpoints use{" "}
               <code className="font-mono text-xs">{CACHED}</code> via <code className="font-mono text-xs">cachedJson</code>.
-              Polling (<code className="font-mono text-xs">/api/live</code>), exports, and the WebSocket stream use{" "}
+              Polling (<code className="font-mono text-xs">/api/live</code>), NDJSON feeds, legacy text/CSV exports, and the WebSocket stream use{" "}
               <code className="font-mono text-xs">no-store</code>.
             </p>
             <p>

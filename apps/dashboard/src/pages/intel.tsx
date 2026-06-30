@@ -1,6 +1,7 @@
 import { Crosshair, Filter, Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueries } from "@tanstack/react-query";
 import { BarChartPanel } from "@/components/data/charts/bar-chart-panel";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorBanner } from "@/components/data/error-banner";
@@ -19,15 +20,62 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { RollupLineChart } from "@/components/data/charts/rollup-line-chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useIntelOverview } from "@/hooks/use-queries";
+import { useIntelOverview, useHttpIntel, useRollups } from "@/hooks/use-queries";
+import { api } from "@/lib/api";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { shortHash } from "@/lib/utils";
+import type { IpDetail } from "@/types/api";
 
 export function IntelPage() {
   const [sinceHours, setSinceHours] = useState("24");
   const [appliedHours, setAppliedHours] = useState("24");
   const { data, isLoading, error } = useIntelOverview(appliedHours);
+  const {
+    data: httpIntel,
+    isLoading: httpLoading,
+    error: httpError
+  } = useHttpIntel(appliedHours);
+  const attackerIps = data?.topAttackers.map((attacker) => attacker.key) ?? [];
+
+  const enrichmentQueries = useQueries({
+    queries: attackerIps.map((ip) => ({
+      queryKey: ["ip-enrich", ip],
+      queryFn: () =>
+        api.get<IpDetail>(`/api/v1/ips/${encodeURIComponent(ip)}?enrich=true&limit=1`),
+      enabled: Boolean(ip),
+      staleTime: 60_000
+    }))
+  });
+
+  const enrichmentByIp = useMemo(() => {
+    const map = new Map<string, IpDetail["profile"]>();
+    attackerIps.forEach((ip, index) => {
+      const profile = enrichmentQueries[index]?.data?.profile;
+      if (profile) map.set(ip, profile);
+    });
+    return map;
+  }, [attackerIps, enrichmentQueries]);
+
+  const topAttackers = useMemo(
+    () =>
+      (data?.topAttackers ?? []).map((attacker) => {
+        const enrichment = enrichmentByIp.get(attacker.key);
+        return {
+          ...attacker,
+          country_code: enrichment?.country_code ?? attacker.country_code,
+          asn: enrichment?.asn ?? attacker.asn,
+          as_name: enrichment?.as_name ?? attacker.as_name
+        };
+      }),
+    [data?.topAttackers, enrichmentByIp]
+  );
+  const {
+    data: rollups,
+    isLoading: rollupsLoading,
+    error: rollupsError
+  } = useRollups({ sinceHours: "168", bucketWidth: "hour", dimension: "protocol" });
 
   return (
     <>
@@ -70,6 +118,144 @@ export function IntelPage() {
               <MetricCard label="Active campaigns" value={data.campaigns.length} icon={Crosshair} />
             </div>
 
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">Trends</h2>
+              {rollupsError && (
+                <ErrorBanner
+                  message={
+                    rollupsError instanceof Error ? rollupsError.message : "Failed to load protocol trends."
+                  }
+                />
+              )}
+              {rollupsLoading ? (
+                <Skeleton className="h-[300px]" />
+              ) : (
+                <RollupLineChart
+                  title="Protocol activity (7 days)"
+                  series={rollups?.series ?? []}
+                  height={300}
+                />
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">HTTP Attack Surface</h2>
+              {httpError && (
+                <ErrorBanner
+                  message={
+                    httpError instanceof Error ? httpError.message : "Failed to load HTTP intelligence."
+                  }
+                />
+              )}
+              {httpLoading ? (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Skeleton className="h-[220px]" />
+                  <Skeleton className="h-[220px]" />
+                </div>
+              ) : !httpIntel ? (
+                <EmptyState message="No HTTP intelligence loaded." />
+              ) : (
+                <>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <BarChartPanel
+                      title="Top HTTP Paths"
+                      data={httpIntel.topPaths.map(({ key, count }) => ({ key, count }))}
+                      height={220}
+                    />
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Top User Agents</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>User agent</TableHead>
+                                <TableHead>Events</TableHead>
+                                <TableHead>Unique IPs</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {httpIntel.topUserAgents.map((row) => (
+                                <TableRow key={row.key}>
+                                  <TableCell className="max-w-[320px]">
+                                    <Link
+                                      to={buildSearchUrl({
+                                        userAgent: row.key.replace(/…$/, ""),
+                                        sinceHours: appliedHours
+                                      })}
+                                      className="break-all text-xs text-primary hover:underline"
+                                    >
+                                      {row.key}
+                                    </Link>
+                                  </TableCell>
+                                  <TableCell>{row.count}</TableCell>
+                                  <TableCell>{row.unique_ips}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {httpIntel.probeTrends.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Exploit Probe Trends</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {httpIntel.probeTrends.map((trend) => (
+                          <div key={trend.key} className="space-y-1">
+                            <p className="font-mono text-xs text-muted-foreground">{trend.key}</p>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              {trend.timeline.map((point) => (
+                                <span key={`${trend.key}-${point.bucket}`} className="rounded border px-2 py-1">
+                                  {point.bucket.slice(11, 16)}Z · {point.count}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {httpIntel.credentialPaths.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Credential Probe Paths</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Path</TableHead>
+                                <TableHead>Events</TableHead>
+                                <TableHead>Unique IPs</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {httpIntel.credentialPaths.map((row) => (
+                                <TableRow key={row.key}>
+                                  <TableCell className="font-mono text-xs">{row.key}</TableCell>
+                                  <TableCell>{row.count}</TableCell>
+                                  <TableCell>{row.unique_ips}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              )}
+            </section>
+
             <Card>
               <CardHeader>
                 <CardTitle>Top Attackers</CardTitle>
@@ -80,13 +266,15 @@ export function IntelPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>IP</TableHead>
+                        <TableHead>Country</TableHead>
+                        <TableHead>ASN / Org</TableHead>
                         <TableHead>Events</TableHead>
                         <TableHead>Max severity</TableHead>
                         <TableHead>Confidence</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.topAttackers.map((attacker) => (
+                      {topAttackers.map((attacker) => (
                         <TableRow key={attacker.key}>
                           <TableCell className="font-mono">
                             <Link
@@ -95,6 +283,11 @@ export function IntelPage() {
                             >
                               {attacker.key}
                             </Link>
+                          </TableCell>
+                          <TableCell>{attacker.country_code || "—"}</TableCell>
+                          <TableCell className="max-w-[220px] truncate text-sm">
+                            {attacker.asn != null ? `AS${attacker.asn}` : "—"}
+                            {attacker.as_name ? ` · ${attacker.as_name}` : ""}
                           </TableCell>
                           <TableCell>{attacker.count}</TableCell>
                           <TableCell>

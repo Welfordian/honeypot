@@ -1,4 +1,4 @@
-import { parseEventCursor, parseLimit, parseSinceHours, publicIp, publicSha256, token } from "./http";
+import { likeSubstring, parseEventCursor, parseLimit, parseSinceHours, publicIp, publicSha256, token } from "./http";
 
 export interface EventsQuery {
   sql: string;
@@ -6,7 +6,12 @@ export interface EventsQuery {
   limit: number;
 }
 
-export function buildEventsQuery(url: URL): EventsQuery | Response {
+export interface EventsQueryOptions {
+  defaultLimit?: number;
+  maxLimit?: number;
+}
+
+export function buildEventsQuery(url: URL, options?: EventsQueryOptions): EventsQuery | Response {
   const where: string[] = [];
   const params: unknown[] = [];
   const ip = publicIp(url.searchParams.get("ip"));
@@ -16,6 +21,7 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
   const eventKind = token(url.searchParams.get("eventKind"), 48);
   const payloadHash = publicSha256(url.searchParams.get("payloadHash"));
   const tag = token(url.searchParams.get("tag"), 80);
+  const userAgent = likeSubstring(url.searchParams.get("userAgent"), 120);
   const confidenceReason = token(url.searchParams.get("confidenceReason"), 48);
   const rawMinConfidence = url.searchParams.get("minConfidence");
   const minConfidence = rawMinConfidence ? Number(rawMinConfidence) : null;
@@ -24,7 +30,7 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
   const destinationPort = rawDestinationPort ? Number(rawDestinationPort) : null;
   const aggregate = url.searchParams.get("aggregate");
   const sinceHours = parseSinceHours(url);
-  const limit = parseLimit(url, 100, 500);
+  const limit = parseLimit(url, options?.defaultLimit ?? 100, options?.maxLimit ?? 500);
   const cursor = parseEventCursor(url.searchParams.get("cursor"));
 
   where.push(`occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`);
@@ -36,6 +42,9 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
     return new Response("invalid destination port", { status: 400 });
   }
   if (url.searchParams.get("tag") && !tag) return new Response("invalid tag", { status: 400 });
+  if (url.searchParams.get("userAgent") && !userAgent) {
+    return new Response("invalid user agent", { status: 400 });
+  }
   if (url.searchParams.get("confidenceReason") && !confidenceReason) {
     return new Response("invalid confidence reason", { status: 400 });
   }
@@ -81,6 +90,10 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
   if (tag) {
     where.push("EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?)");
     params.push(tag);
+  }
+  if (userAgent) {
+    where.push("user_agent LIKE ? ESCAPE '\\'");
+    params.push(userAgent);
   }
   if (confidenceReason) {
     where.push("EXISTS (SELECT 1 FROM json_each(confidence_reasons_json) WHERE value = ?)");

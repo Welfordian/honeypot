@@ -9,7 +9,8 @@ import {
   ListFilter,
   Network,
   ShieldAlert,
-  Signal
+  Signal,
+  Users
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 export const navItems = [
   { to: "/", label: "Overview", icon: Activity, end: true },
   { to: "/intel", label: "Intel", icon: Crosshair },
+  { to: "/actors", label: "Actors", icon: Users },
   { to: "/live", label: "Live", icon: Signal },
   { to: "/search", label: "Search", icon: ListFilter },
   { to: "/network", label: "Network", icon: Network },

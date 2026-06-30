@@ -4,6 +4,7 @@ import { EventsPage } from "@/pages/events";
 import { DocsPage } from "@/pages/docs";
 import { ExportsPage } from "@/pages/exports";
 import { HealthPage } from "@/pages/health";
+import { ActorsPage } from "@/pages/actors";
 import { IntelPage } from "@/pages/intel";
 import { IpDetailPage } from "@/pages/ip-detail";
 import { IpsPage } from "@/pages/ips";
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
         )
       },
       { path: "intel", element: <IntelPage /> },
+      { path: "actors", element: <ActorsPage /> },
       { path: "live", element: <LivePage /> },
       { path: "search", element: <EventsPage /> },
       { path: "network", element: <NetworkPage /> },

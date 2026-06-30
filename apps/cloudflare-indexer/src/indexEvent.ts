@@ -1,5 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { LiveEvent, StoredR2Event } from "./types.js";
+import { enrichIpProfile } from "../../../functions/_lib/enrichment.js";
 import { publicEventRow } from "./publicEvent.js";
 import { confidenceForProfile, isOperationalSensorId } from "@honeypot/shared";
 
@@ -104,6 +105,12 @@ async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventR
         row.indexed_at
       )
       .run();
+
+    try {
+      await enrichIpProfile(db, row.source_ip);
+    } catch (error) {
+      console.warn("IP enrichment failed", row.source_ip, error);
+    }
     return;
   }
 

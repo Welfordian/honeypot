@@ -8,6 +8,7 @@ const LEGACY_VIEW_MAP: Record<string, string> = {
   payloads: "/payloads",
   exports: "/exports",
   intel: "/intel",
+  actors: "/actors",
   health: "/health",
   docs: "/docs",
   api: "/docs"

@@ -12,6 +12,24 @@ export function cachedJson(body: unknown, init: ResponseInit = {}): Response {
   return json(body, { ...init, headers });
 }
 
+export function ndjson(lines: string[], init: ResponseInit = {}): Response {
+  const body = lines.length ? `${lines.join("\n")}\n` : "";
+  return text(body, "application/x-ndjson; charset=utf-8", init);
+}
+
+export function parseSinceIso(value: string | null): string | Response {
+  if (!value) return badRequest("since is required");
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 64 || !Number.isFinite(Date.parse(trimmed))) {
+    return badRequest("invalid since timestamp");
+  }
+  return trimmed;
+}
+
+export function feedLimitParam(url: URL, fallback = 500): number {
+  return parseLimit(url, fallback, 5000);
+}
+
 export function text(body: string, contentType = "text/plain; charset=utf-8", init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set("content-type", contentType);
@@ -78,4 +96,12 @@ export function token(value: string | null, max = 120): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > max) return null;
   return /^[A-Za-z0-9_.-]+$/.test(trimmed) ? trimmed : null;
+}
+
+export function likeSubstring(value: string | null, max = 120): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > max) return null;
+  const escaped = trimmed.replace(/[%_\\]/g, (char) => `\\${char}`);
+  return `%${escaped}%`;
 }

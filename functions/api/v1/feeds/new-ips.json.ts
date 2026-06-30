@@ -1,5 +1,5 @@
 import type { PagesCtx } from "../../../_lib/env";
-import { cachedJson, parseLimit, parseOffset, urlOf } from "../../../_lib/http";
+import { badRequest, cachedJson, urlOf } from "../../../_lib/http";
 import { parseJsonList } from "../../../_lib/rows";
 
 interface IpRow {
@@ -14,26 +14,35 @@ interface IpRow {
   protocols_json: string;
   last_trap: string | null;
   last_protocol: string | null;
-  country_code: string | null;
-  asn: number | null;
-  as_name: string | null;
+}
+
+function parseSinceIso(value: string | null): string | Response {
+  if (!value?.trim()) return badRequest("since is required (ISO8601 timestamp).");
+  const parsed = Date.parse(value.trim());
+  if (!Number.isFinite(parsed)) return badRequest("Invalid since timestamp.");
+  return new Date(parsed).toISOString();
 }
 
 export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const url = urlOf(ctx.request);
-  const limit = parseLimit(url, 100, 500);
-  const offset = parseOffset(url);
+  const since = parseSinceIso(url.searchParams.get("since"));
+  if (since instanceof Response) return since;
+
   const result = await ctx.env.DB.prepare(
     `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
-       unique_traps_json, protocols_json, last_trap, last_protocol, country_code, asn, as_name
+       unique_traps_json, protocols_json, last_trap, last_protocol
      FROM ip_profiles
-     ORDER BY confidence DESC, score DESC, event_count DESC, last_seen DESC
-     LIMIT ? OFFSET ?`
-  ).bind(limit + 1, offset).all<IpRow>();
-  const rows = result.results.slice(0, limit);
+     WHERE first_seen >= ?
+     ORDER BY first_seen DESC
+     LIMIT 5000`
+  )
+    .bind(since)
+    .all<IpRow>();
 
   return cachedJson({
-    ips: rows.map((row) => ({
+    since,
+    count: result.results.length,
+    ips: result.results.map((row) => ({
       source_ip: row.source_ip,
       first_seen: row.first_seen,
       last_seen: row.last_seen,
@@ -44,11 +53,7 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
       unique_traps: parseJsonList(row.unique_traps_json),
       protocols: parseJsonList(row.protocols_json),
       last_trap: row.last_trap,
-      last_protocol: row.last_protocol,
-      country_code: row.country_code,
-      asn: row.asn,
-      as_name: row.as_name
-    })),
-    next_offset: result.results.length > limit ? offset + limit : null
+      last_protocol: row.last_protocol
+    }))
   });
 };

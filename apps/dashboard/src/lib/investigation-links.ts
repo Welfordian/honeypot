@@ -11,6 +11,7 @@ export interface SearchUrlFilters {
   destinationPort?: string;
   minConfidence?: string;
   hasCredentials?: string;
+  userAgent?: string;
   sinceHours?: string;
 }
 
@@ -27,6 +28,7 @@ export function buildSearchUrl(filters: SearchUrlFilters): string {
     ["destinationPort", filters.destinationPort],
     ["minConfidence", filters.minConfidence],
     ["hasCredentials", filters.hasCredentials],
+    ["userAgent", filters.userAgent],
     ["sinceHours", filters.sinceHours]
   ];
 
@@ -51,7 +53,8 @@ export function filtersFromSearchParams(params: URLSearchParams): EventFilters {
     minConfidence: params.get("minConfidence") ?? "",
     hasCredentials: params.get("hasCredentials") ?? "",
     payloadHash: params.get("payloadHash") ?? "",
-    trap: params.get("trap") ?? ""
+    trap: params.get("trap") ?? "",
+    userAgent: params.get("userAgent") ?? ""
   };
 }
 
@@ -69,7 +72,8 @@ export function searchParamsFromFilters(filters: EventFilters): URLSearchParams 
     ["minConfidence", filters.minConfidence],
     ["hasCredentials", filters.hasCredentials],
     ["payloadHash", filters.payloadHash],
-    ["trap", filters.trap]
+    ["trap", filters.trap],
+    ["userAgent", filters.userAgent]
   ];
 
   for (const [key, value] of entries) {

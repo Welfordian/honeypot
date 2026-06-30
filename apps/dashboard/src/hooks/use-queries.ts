@@ -2,16 +2,22 @@ import { useInfiniteQuery, useQuery, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { mergeByKey } from "@/lib/utils";
 import type {
+  CompareResponse,
   EventFilters,
   EventRow,
+  HttpIntelOverview,
+  IntelActor,
+  IntelCampaigns,
   IntelOverview,
   IpDetail,
   IpProfile,
   NetworkOverview,
+  NewIpsResponse,
   OpsStatus,
   Overview,
   PayloadDetail,
   PayloadRow,
+  RollupsResponse,
   TimelinePoint
 } from "@/types/api";
 
@@ -23,7 +29,7 @@ export function useOverview() {
   });
 }
 
-function buildEventParams(filters: EventFilters, cursor?: string | null) {
+export function buildEventParams(filters: EventFilters, cursor?: string | null): URLSearchParams {
   const params = new URLSearchParams({ limit: "100", sinceHours: filters.sinceHours });
   if (filters.ip) params.set("ip", filters.ip);
   if (filters.eventType) params.set("eventType", filters.eventType);
@@ -36,8 +42,9 @@ function buildEventParams(filters: EventFilters, cursor?: string | null) {
   if (filters.hasCredentials) params.set("hasCredentials", filters.hasCredentials);
   if (filters.payloadHash) params.set("payloadHash", filters.payloadHash);
   if (filters.trap) params.set("trap", filters.trap);
+  if (filters.userAgent) params.set("userAgent", filters.userAgent);
   if (cursor) params.set("cursor", cursor);
-  return params.toString();
+  return params;
 }
 
 export function useEvents(filters: EventFilters) {
@@ -45,7 +52,7 @@ export function useEvents(filters: EventFilters) {
     queryKey: ["events", filters],
     queryFn: ({ pageParam }) =>
       api.get<{ events: EventRow[]; next_cursor: string | null }>(
-        `/api/v1/events?${buildEventParams(filters, pageParam as string | undefined)}`
+        `/api/v1/events?${buildEventParams(filters, pageParam as string | undefined).toString()}`
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
@@ -204,6 +211,35 @@ export function useIntelOverview(sinceHours: string) {
   });
 }
 
+export function useHttpIntel(sinceHours: string) {
+  return useQuery({
+    queryKey: ["intel-http", sinceHours],
+    queryFn: () =>
+      api.get<HttpIntelOverview>(`/api/v1/intel/http?sinceHours=${encodeURIComponent(sinceHours)}`),
+    staleTime: 30_000
+  });
+}
+
+export function useActors(sinceHours: string, limit = 20) {
+  return useQuery({
+    queryKey: ["intel-actors", sinceHours, limit],
+    queryFn: () =>
+      api.get<{ actors: IntelActor[] }>(
+        `/api/v1/intel/actors?sinceHours=${encodeURIComponent(sinceHours)}&limit=${limit}`
+      ),
+    staleTime: 30_000
+  });
+}
+
+export function useBehavioralCampaigns(sinceHours: string) {
+  return useQuery({
+    queryKey: ["intel-campaigns", sinceHours],
+    queryFn: () =>
+      api.get<IntelCampaigns>(`/api/v1/intel/campaigns?sinceHours=${encodeURIComponent(sinceHours)}`),
+    staleTime: 30_000
+  });
+}
+
 export function useOpsStatus(options?: { refetchInterval?: number }) {
   return useQuery<OpsStatus>({
     queryKey: ["ops-status"],
@@ -212,6 +248,61 @@ export function useOpsStatus(options?: { refetchInterval?: number }) {
     ...(options?.refetchInterval !== undefined
       ? { refetchInterval: options.refetchInterval }
       : {})
+  });
+}
+
+export interface RollupsParams {
+  sinceHours?: string;
+  bucketWidth?: "hour" | "day";
+  dimension?: string;
+}
+
+export function useRollups({
+  sinceHours = "168",
+  bucketWidth = "hour",
+  dimension = "protocol"
+}: RollupsParams = {}) {
+  const params = new URLSearchParams({
+    sinceHours,
+    bucketWidth,
+    dimension
+  });
+  return useQuery({
+    queryKey: ["rollups", sinceHours, bucketWidth, dimension],
+    queryFn: () => api.get<RollupsResponse>(`/api/v1/analytics/rollups?${params.toString()}`),
+    staleTime: 60_000
+  });
+}
+
+export interface CompareParams {
+  dimension: "tag" | "confidenceReason" | "trap";
+  key: string;
+  hoursA?: string;
+  hoursB?: string;
+}
+
+export function useCompare({ dimension, key, hoursA = "24", hoursB = "168" }: CompareParams) {
+  const params = new URLSearchParams({
+    dimension,
+    key,
+    hoursA,
+    hoursB
+  });
+  return useQuery({
+    queryKey: ["compare", dimension, key, hoursA, hoursB],
+    queryFn: () => api.get<CompareResponse>(`/api/v1/analytics/compare?${params.toString()}`),
+    enabled: Boolean(key),
+    staleTime: 60_000
+  });
+}
+
+export function useNewIps(since: string) {
+  return useQuery({
+    queryKey: ["new-ips", since],
+    queryFn: () =>
+      api.get<NewIpsResponse>(`/api/v1/feeds/new-ips.json?since=${encodeURIComponent(since)}`),
+    enabled: Boolean(since),
+    staleTime: 60_000
   });
 }
 

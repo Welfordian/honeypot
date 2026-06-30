@@ -27,6 +27,7 @@ export function IpsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>IP</TableHead>
+                    <TableHead>Country</TableHead>
                     <TableHead>Confidence</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Events</TableHead>
@@ -44,6 +45,7 @@ export function IpsPage() {
                           {ip.source_ip}
                         </Link>
                       </TableCell>
+                      <TableCell>{ip.country_code || "—"}</TableCell>
                       <TableCell>
                         <SeverityBadge value={ip.confidence} type="confidence" />
                       </TableCell>

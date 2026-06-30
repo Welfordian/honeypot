@@ -1,4 +1,5 @@
 import type { PagesCtx } from "../../../_lib/env";
+import { enrichIpProfile, enrichmentFromRow, needsEnrichment } from "../../../_lib/enrichment";
 import { badRequest, cachedJson, json, parseEventCursor, parseLimit, publicIp, urlOf } from "../../../_lib/http";
 import { parseJsonList, publicEventPage, type EventRow } from "../../../_lib/rows";
 
@@ -14,6 +15,9 @@ interface IpRow {
   protocols_json: string;
   last_trap: string | null;
   last_protocol: string | null;
+  country_code: string | null;
+  asn: number | null;
+  as_name: string | null;
 }
 
 export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
@@ -32,12 +36,24 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   }
   eventParams.push(limit + 1);
 
-  const profile = await ctx.env.DB.prepare(
+  const enrich = url.searchParams.get("enrich") === "true";
+
+  let profile = await ctx.env.DB.prepare(
     `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
-       unique_traps_json, protocols_json, last_trap, last_protocol
+       unique_traps_json, protocols_json, last_trap, last_protocol, country_code, asn, as_name
      FROM ip_profiles WHERE source_ip = ?`
   ).bind(ip).first<IpRow>();
   if (!profile) return json({ error: "not_found" }, { status: 404 });
+
+  if (enrich && needsEnrichment(profile)) {
+    await enrichIpProfile(ctx.env.DB, ip);
+    profile = await ctx.env.DB.prepare(
+      `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
+         unique_traps_json, protocols_json, last_trap, last_protocol, country_code, asn, as_name
+       FROM ip_profiles WHERE source_ip = ?`
+    ).bind(ip).first<IpRow>();
+    if (!profile) return json({ error: "not_found" }, { status: 404 });
+  }
 
   const events = await ctx.env.DB.prepare(
     `SELECT id, occurred_at, received_at, event_kind, source_ip, source_port, destination_port, protocol, trap, sensor_id,
@@ -63,7 +79,8 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
       unique_traps: parseJsonList(profile.unique_traps_json),
       protocols: parseJsonList(profile.protocols_json),
       last_trap: profile.last_trap,
-      last_protocol: profile.last_protocol
+      last_protocol: profile.last_protocol,
+      ...enrichmentFromRow(profile)
     },
     ...eventPage
   });

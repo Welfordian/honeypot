@@ -42,6 +42,9 @@ export interface IpProfile {
   confidence_reasons: string[];
   last_trap?: string | null;
   last_protocol?: string | null;
+  country_code?: string | null;
+  asn?: number | null;
+  as_name?: string | null;
 }
 
 export interface Overview {
@@ -150,6 +153,7 @@ export interface EventFilters {
   hasCredentials: string;
   payloadHash: string;
   trap: string;
+  userAgent: string;
 }
 
 export const CONFIDENCE_REASONS = [
@@ -180,7 +184,8 @@ export const DEFAULT_EVENT_FILTERS: EventFilters = {
   minConfidence: "",
   hasCredentials: "",
   payloadHash: "",
-  trap: ""
+  trap: "",
+  userAgent: ""
 };
 
 export type SensorStatus = "ok" | "warning" | "stale";
@@ -190,6 +195,9 @@ export interface IntelAttacker {
   count: number;
   max_severity: number;
   max_confidence: number;
+  country_code?: string | null;
+  asn?: number | null;
+  as_name?: string | null;
 }
 
 export interface IntelCampaign {
@@ -206,6 +214,52 @@ export interface IntelOverview {
   credentialAttempts: number;
   highConfidenceIps: number;
   campaigns: IntelCampaign[];
+}
+
+export interface HttpIntelRow {
+  key: string;
+  count: number;
+  unique_ips: number;
+}
+
+export interface HttpProbeTrend {
+  key: string;
+  timeline: Array<{ bucket: string; count: number }>;
+}
+
+export interface HttpIntelOverview {
+  topPaths: HttpIntelRow[];
+  topUserAgents: HttpIntelRow[];
+  probeTrends: HttpProbeTrend[];
+  credentialPaths: HttpIntelRow[];
+}
+
+export interface IntelActor {
+  actor_id: string;
+  source_ip: string;
+  event_count: number;
+  confidence: number;
+  first_seen: string;
+  last_seen: string;
+  trap_sequence: string[];
+  protocols: string[];
+  tags: string[];
+  related_payloads: string[];
+  related_ips: string[];
+}
+
+export interface BehavioralCampaign {
+  campaign_id: string;
+  traps: string[];
+  unique_ips: number;
+  event_count: number;
+  max_confidence: number;
+  source_ips: string[];
+}
+
+export interface IntelCampaigns {
+  payload_campaigns: IntelCampaign[];
+  behavioral_campaigns: BehavioralCampaign[];
 }
 
 export interface OpsSensor {
@@ -233,4 +287,40 @@ export interface OpsStatus {
     events: number;
     unique_ips: number;
   };
+}
+
+export interface RollupPoint {
+  bucket: string;
+  count: number;
+  unique_ips: number;
+}
+
+export interface RollupSeries {
+  key: string;
+  points: RollupPoint[];
+}
+
+export interface RollupsResponse {
+  dimension: string;
+  bucketWidth: "hour" | "day";
+  sinceHours: number;
+  series: RollupSeries[];
+}
+
+export interface CompareWindow {
+  hours: number;
+  count: number;
+}
+
+export interface CompareResponse {
+  dimension: "tag" | "confidenceReason" | "trap";
+  key: string;
+  windowA: CompareWindow;
+  windowB: CompareWindow;
+}
+
+export interface NewIpsResponse {
+  since: string;
+  count: number;
+  ips: IpProfile[];
 }

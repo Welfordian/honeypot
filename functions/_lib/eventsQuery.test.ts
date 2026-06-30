@@ -77,4 +77,27 @@ describe("buildEventsQuery", () => {
     expect(query).toBeInstanceOf(Response);
     expect((query as Response).status).toBe(400);
   });
+
+  it("filters by userAgent substring via LIKE", () => {
+    const query = queryFrom("?userAgent=curl");
+
+    expect(query).not.toBeInstanceOf(Response);
+    if (query instanceof Response) return;
+    expect(query.sql).toContain("user_agent LIKE ? ESCAPE");
+    expect(query.params).toContain("%curl%");
+  });
+
+  it("escapes LIKE wildcards in userAgent", () => {
+    const query = queryFrom("?userAgent=100%25");
+
+    expect(query).not.toBeInstanceOf(Response);
+    if (query instanceof Response) return;
+    expect(query.params).toContain("%100\\%%");
+  });
+
+  it("rejects userAgent longer than 120 characters", () => {
+    const query = queryFrom(`?userAgent=${"a".repeat(121)}`);
+    expect(query).toBeInstanceOf(Response);
+    expect((query as Response).status).toBe(400);
+  });
 });
