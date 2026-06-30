@@ -5,10 +5,9 @@ CREATE TABLE IF NOT EXISTS ingest_watermark (
   updated_at TEXT NOT NULL
 );
 
-INSERT INTO ingest_watermark (id, last_event_at, last_received_at, updated_at)
+INSERT OR IGNORE INTO ingest_watermark (id, last_event_at, last_received_at, updated_at)
 SELECT 1, MAX(occurred_at), MAX(received_at), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-FROM events
-ON CONFLICT(id) DO NOTHING;
+FROM events;
 
 CREATE INDEX IF NOT EXISTS idx_analytics_rollups_window
   ON analytics_rollups (bucket_width, dimension, bucket_start);

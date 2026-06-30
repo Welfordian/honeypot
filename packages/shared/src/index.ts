@@ -150,6 +150,10 @@ export function isOperationalSensorId(sensorId: string): boolean {
 const HIGH_RISK_PROTOCOLS = new Set(["ssh", "telnet", "mysql", "mssql", "redis", "smb", "rdp", "vnc", "ftp"]);
 const SENSITIVE_PATH_PATTERN = /(wp-login|wp-admin|phpmyadmin|\.env|\.git|metadata|jenkins|grafana|kubernetes|docker|laravel|actuator|config|backup|admin|login)/i;
 const EXPLOIT_PATH_PATTERN = /(\.\.\/|%2e%2e|cgi-bin|eval\(|base64_decode|select.+from|union.+select|cmd=|exec=|shell|jndi:|struts|thinkphp|boaform|vendor\/phpunit)/i;
+
+export function isExploitHttpPath(path: string): boolean {
+  return EXPLOIT_PATH_PATTERN.test(path);
+}
 const SCANNER_UA_PATTERN = /(curl|wget|python-requests|masscan|zgrab|nmap|sqlmap|nikto|go-http-client|internetmeasurement|censys|shodan|scanner)/i;
 
 function boundedConfidence(value: number): number {

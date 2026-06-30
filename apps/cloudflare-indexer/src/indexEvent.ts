@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { MmdbBucket } from "../../../functions/_lib/ipinfoMmdb.js";
 import type { LiveEvent, StoredR2Event } from "./types.js";
 import { enrichIpProfile } from "../../../functions/_lib/enrichment.js";
+import { attackTechniqueIds } from "../../../functions/_lib/attackMapping.js";
 import { touchIngestWatermark, updateRollup } from "../../../functions/_lib/rollups.js";
 import { publicEventRow } from "./publicEvent.js";
 import { confidenceForProfile, isOperationalSensorId } from "@honeypot/shared";
@@ -153,6 +154,77 @@ async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventR
     .run();
 }
 
+const HTTP_UA_TRUNCATE = 120;
+const NETWORK_KINDS = new Set(["network-attempt", "tcp-banner"]);
+
+function isHttpProtocol(protocol: string): boolean {
+  const lower = protocol.toLowerCase();
+  return lower === "http" || lower === "https";
+}
+
+async function indexRollups(db: D1Database, row: ReturnType<typeof publicEventRow>): Promise<void> {
+  const techniqueInput = {
+    protocol: row.protocol,
+    trap: row.trap,
+    http_path: row.http_path,
+    has_credentials: Boolean(row.has_username || row.has_password),
+    confidence_reasons: parseList(row.confidence_reasons_json)
+  };
+
+  for (const width of ["hour", "day"] as const) {
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "event_kind", row.event_kind);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "protocol", row.protocol);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "trap", row.trap);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "severity", String(row.severity));
+
+    if (row.destination_port !== null) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "destination_port", String(row.destination_port));
+    }
+    if (row.tcp_flags) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "tcp_flags", row.tcp_flags);
+    }
+    for (const tag of parseList(row.tags_json)) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "tag", tag);
+    }
+    for (const reason of parseList(row.confidence_reasons_json)) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "confidence_reason", reason);
+    }
+    for (const techniqueId of attackTechniqueIds(techniqueInput)) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "attack_technique", techniqueId);
+    }
+    if (row.has_username || row.has_password) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "has_credentials", "1");
+    }
+    if (row.confidence >= 80) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "high_confidence_ip", row.source_ip);
+    }
+
+    if (isHttpProtocol(row.protocol) && row.http_path) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "http_path", row.http_path);
+      if (row.has_username || row.has_password) {
+        await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "http_credential_path", row.http_path);
+      }
+    }
+    if (isHttpProtocol(row.protocol) && row.user_agent) {
+      const ua = row.user_agent.length > HTTP_UA_TRUNCATE ? row.user_agent.slice(0, HTTP_UA_TRUNCATE) : row.user_agent;
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "http_user_agent", ua);
+    }
+
+    if (NETWORK_KINDS.has(row.event_kind)) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "net_protocol", row.protocol);
+      if (row.destination_port !== null) {
+        await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "net_destination_port", String(row.destination_port));
+      }
+      if (row.tcp_flags) {
+        await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "net_tcp_flags", row.tcp_flags);
+      }
+      if (row.event_kind === "tcp-banner") {
+        await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "net_banner_ip", row.source_ip);
+      }
+    }
+  }
+}
+
 export async function indexStoredEvent(
   db: D1Database,
   event: StoredR2Event,
@@ -241,24 +313,7 @@ export async function indexStoredEvent(
       .run();
   }
 
-  for (const width of ["hour", "day"] as const) {
-    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "event_kind", row.event_kind);
-    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "protocol", row.protocol);
-    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "trap", row.trap);
-    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "severity", String(row.severity));
-    if (row.destination_port !== null) {
-      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "destination_port", String(row.destination_port));
-    }
-    if (row.tcp_flags) {
-      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "tcp_flags", row.tcp_flags);
-    }
-    for (const tag of parseList(row.tags_json)) {
-      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "tag", tag);
-    }
-    for (const reason of parseList(row.confidence_reasons_json)) {
-      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "confidence_reason", reason);
-    }
-  }
+  await indexRollups(db, row);
 
   await touchIngestWatermark(db, row.occurred_at, row.received_at, row.indexed_at);
 
