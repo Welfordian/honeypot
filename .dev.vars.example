@@ -1,0 +1,13 @@
+# Copy to .dev.vars for local Pages Functions / wrangler pages dev (not committed).
+# Generate tokens: openssl rand -hex 32
+
+# Hunts admin proxy (optional — only needed to test /api/v1/admin/hunts locally)
+INDEXER_URL=https://honeypot-r2-indexer.example.workers.dev
+INDEXER_ADMIN_TOKEN=
+
+# Researcher PCAP/payload endpoints (optional)
+RESEARCHER_API_TOKEN=
+
+# Reputation overlay (optional)
+GREYNOISE_API_KEY=
+VIRUSTOTAL_API_KEY=

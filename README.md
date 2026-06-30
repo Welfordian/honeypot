@@ -31,18 +31,23 @@ npm run typecheck
 npm run build
 ```
 
-The Cloudflare Pages dashboard can run locally with:
+The dashboard UI alone (no API data) runs with:
 
 ```sh
 npm run dev:dashboard
 ```
 
-For full local Cloudflare binding emulation, build the dashboard and run:
+For a full local stack — Vite HMR, Pages Functions with D1/R2 bindings, and the live-stream WebSocket — use:
 
 ```sh
-npm run build -w @honeypot/dashboard
-npx wrangler pages dev apps/dashboard/dist
+npm run dev:cloudflare
 ```
+
+Open `http://127.0.0.1:5173`. API requests are proxied to `wrangler pages dev`; `/api/live-stream` is proxied to the live-stream worker.
+
+- **Local bindings** (default): applies D1 migrations to `.wrangler/state`. The DB is empty until events are ingested or you seed data.
+- **Production data**: `npm run dev:cloudflare -- --remote` swaps in `wrangler.dev.jsonc` (`remote: true` on D1/R2) for the dev session. Requires `wrangler login`. Pass `--skip-migrate` if the remote schema is already current.
+- **Secrets** (hunts admin, researcher endpoints): copy `.dev.vars.example` to `.dev.vars`.
 
 ## Cloudflare Setup
 

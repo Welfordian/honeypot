@@ -1,8 +1,11 @@
 import type { PagesCtx } from "../../../_lib/env";
+import { relatedIpsAmongActors } from "../../../_lib/actorRelated";
 import { cachedJson, parseLimit, parseSinceHours, urlOf } from "../../../_lib/http";
+import { parseJsonList } from "../../../_lib/rows";
 
 const SINCE_CLAUSE = `occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`;
 const UA_PREFIX_LEN = 32;
+const ACTORS_CACHE = { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } };
 
 interface ActorBase {
   source_ip: string;
@@ -38,12 +41,6 @@ interface UaRow {
   ua_prefix: string;
 }
 
-interface SiblingRow {
-  ip_a: string;
-  ip_b: string;
-  shared_traps: number;
-}
-
 function groupBy<T>(rows: T[], keyFn: (row: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const row of rows) {
@@ -69,38 +66,46 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
      GROUP BY source_ip
      ORDER BY event_count DESC, confidence DESC, last_seen DESC
      LIMIT ?`
-  ).bind(since, limit).all<ActorBase>();
+  )
+    .bind(since, limit)
+    .all<ActorBase>();
 
   const bases = topActors.results;
   if (bases.length === 0) {
-    return cachedJson({ actors: [] });
+    return cachedJson({ actors: [] }, ACTORS_CACHE);
   }
 
   const ips = bases.map((row) => row.source_ip);
   const placeholders = ips.map(() => "?").join(",");
 
-  const [trapSeq, protocols, tags, payloads, uaPrefixes, siblingPairs] = await Promise.all([
+  const [trapSeq, protocols, tags, payloads, uaPrefixes, profileRows] = await Promise.all([
     ctx.env.DB.prepare(
       `SELECT source_ip, trap
        FROM events
        WHERE ${SINCE_CLAUSE} AND source_ip IN (${placeholders})
        GROUP BY source_ip, trap
        ORDER BY source_ip, MIN(occurred_at) ASC`
-    ).bind(since, ...ips).all<TrapSeqRow>(),
+    )
+      .bind(since, ...ips)
+      .all<TrapSeqRow>(),
     ctx.env.DB.prepare(
       `SELECT source_ip, protocol
        FROM events
        WHERE ${SINCE_CLAUSE} AND source_ip IN (${placeholders})
        GROUP BY source_ip, protocol
        ORDER BY source_ip, protocol ASC`
-    ).bind(since, ...ips).all<ProtocolRow>(),
+    )
+      .bind(since, ...ips)
+      .all<ProtocolRow>(),
     ctx.env.DB.prepare(
       `SELECT e.source_ip, j.value AS tag
        FROM events e, json_each(e.tags_json) j
        WHERE e.${SINCE_CLAUSE} AND e.source_ip IN (${placeholders})
        GROUP BY e.source_ip, j.value
        ORDER BY e.source_ip, j.value ASC`
-    ).bind(since, ...ips).all<TagRow>(),
+    )
+      .bind(since, ...ips)
+      .all<TagRow>(),
     ctx.env.DB.prepare(
       `SELECT source_ip, payload_sha256, COUNT(*) AS cnt
        FROM events
@@ -108,7 +113,9 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
          AND payload_sha256 IS NOT NULL
        GROUP BY source_ip, payload_sha256
        ORDER BY source_ip, cnt DESC`
-    ).bind(since, ...ips).all<PayloadRow>(),
+    )
+      .bind(since, ...ips)
+      .all<PayloadRow>(),
     ctx.env.DB.prepare(
       `SELECT source_ip, substr(COALESCE(user_agent, ''), 1, ${UA_PREFIX_LEN}) AS ua_prefix, COUNT(*) AS cnt
        FROM events
@@ -116,27 +123,28 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
          AND user_agent IS NOT NULL AND user_agent != ''
        GROUP BY source_ip, ua_prefix
        ORDER BY source_ip, cnt DESC`
-    ).bind(since, ...ips).all<UaRow>(),
+    )
+      .bind(since, ...ips)
+      .all<UaRow>(),
     ctx.env.DB.prepare(
-      `WITH ip_traps AS (
-         SELECT source_ip, trap
-         FROM events
-         WHERE ${SINCE_CLAUSE}
-         GROUP BY source_ip, trap
-       )
-       SELECT a.source_ip AS ip_a, b.source_ip AS ip_b, COUNT(*) AS shared_traps
-       FROM ip_traps a
-       JOIN ip_traps b ON a.trap = b.trap AND a.source_ip < b.source_ip
-       WHERE a.source_ip IN (${placeholders}) OR b.source_ip IN (${placeholders})
-       GROUP BY a.source_ip, b.source_ip
-       HAVING shared_traps >= 2`
-    ).bind(since, ...ips, ...ips).all<SiblingRow>()
+      `SELECT source_ip, unique_traps_json, protocols_json, confidence_reasons_json
+       FROM ip_profiles
+       WHERE source_ip IN (${placeholders})`
+    )
+      .bind(...ips)
+      .all<{
+        source_ip: string;
+        unique_traps_json: string;
+        protocols_json: string;
+        confidence_reasons_json: string;
+      }>()
   ]);
 
   const trapSeqByIp = groupBy(trapSeq.results, (row) => row.source_ip);
   const protocolsByIp = groupBy(protocols.results, (row) => row.source_ip);
   const tagsByIp = groupBy(tags.results, (row) => row.source_ip);
   const payloadsByIp = groupBy(payloads.results, (row) => row.source_ip);
+  const profileByIp = new Map(profileRows.results.map((row) => [row.source_ip, row]));
 
   const uaByIp = new Map<string, string>();
   for (const row of uaPrefixes.results) {
@@ -145,24 +153,20 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
     }
   }
 
-  const siblingsByIp = new Map<string, Set<string>>();
-  for (const row of siblingPairs.results) {
-    const uaA = uaByIp.get(row.ip_a);
-    const uaB = uaByIp.get(row.ip_b);
-    if (!uaA || !uaB || uaA !== uaB) continue;
-
-    const setA = siblingsByIp.get(row.ip_a) ?? new Set<string>();
-    setA.add(row.ip_b);
-    siblingsByIp.set(row.ip_a, setA);
-
-    const setB = siblingsByIp.get(row.ip_b) ?? new Set<string>();
-    setB.add(row.ip_a);
-    siblingsByIp.set(row.ip_b, setB);
-  }
+  const siblingsByIp = relatedIpsAmongActors(
+    ips,
+    new Map(
+      ips.map((ip) => [ip, (trapSeqByIp.get(ip) ?? []).map((row) => row.trap)])
+    ),
+    uaByIp
+  );
 
   const actors = bases.map((base) => {
-    const trapSequence = (trapSeqByIp.get(base.source_ip) ?? []).map((row) => row.trap);
-    const protocolList = (protocolsByIp.get(base.source_ip) ?? []).map((row) => row.protocol);
+    const profile = profileByIp.get(base.source_ip);
+    let trapSequence = (trapSeqByIp.get(base.source_ip) ?? []).map((row) => row.trap);
+    if (!trapSequence.length) trapSequence = parseJsonList(profile?.unique_traps_json ?? "[]");
+    let protocolList = (protocolsByIp.get(base.source_ip) ?? []).map((row) => row.protocol);
+    if (!protocolList.length) protocolList = parseJsonList(profile?.protocols_json ?? "[]");
     const tagList = (tagsByIp.get(base.source_ip) ?? []).map((row) => row.tag);
     const relatedPayloads = (payloadsByIp.get(base.source_ip) ?? [])
       .slice(0, 5)
@@ -184,5 +188,5 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
     };
   });
 
-  return cachedJson({ actors });
+  return cachedJson({ actors }, ACTORS_CACHE);
 };

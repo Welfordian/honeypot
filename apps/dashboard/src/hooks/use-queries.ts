@@ -29,7 +29,7 @@ export function useOverview() {
   return useQuery({
     queryKey: ["overview"],
     queryFn: () => api.get<Overview>("/api/analytics/overview?sinceHours=24"),
-    staleTime: 30_000
+    staleTime: 60_000
   });
 }
 
@@ -212,7 +212,7 @@ export function useIntelOverview(sinceHours: string) {
     queryKey: ["intel-overview", sinceHours],
     queryFn: () =>
       api.get<IntelOverview>(`/api/v1/intel/overview?sinceHours=${encodeURIComponent(sinceHours)}`),
-    staleTime: 30_000
+    staleTime: 60_000
   });
 }
 
@@ -260,7 +260,7 @@ export function useOpsStatus(options?: { refetchInterval?: number }) {
   return useQuery<OpsStatus>({
     queryKey: ["ops-status"],
     queryFn: () => api.get<OpsStatus>("/api/v1/ops/status"),
-    staleTime: 30_000,
+    staleTime: 60_000,
     ...(options?.refetchInterval !== undefined
       ? { refetchInterval: options.refetchInterval }
       : {})

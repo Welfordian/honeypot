@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { MmdbBucket } from "../../../functions/_lib/ipinfoMmdb.js";
 import type { LiveEvent, StoredR2Event } from "./types.js";
 import { enrichIpProfile } from "../../../functions/_lib/enrichment.js";
+import { touchIngestWatermark, updateRollup } from "../../../functions/_lib/rollups.js";
 import { publicEventRow } from "./publicEvent.js";
 import { confidenceForProfile, isOperationalSensorId } from "@honeypot/shared";
 
@@ -61,13 +62,6 @@ function liveEventFromRow(row: ReturnType<typeof publicEventRow>): LiveEvent {
     confidence_reasons: parseList(row.confidence_reasons_json),
     tags: parseList(row.tags_json)
   };
-}
-
-function bucketStart(iso: string, width: "hour" | "day"): string {
-  const date = new Date(iso);
-  if (width === "day") date.setUTCHours(0, 0, 0, 0);
-  else date.setUTCMinutes(0, 0, 0);
-  return date.toISOString();
 }
 
 async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventRow>, bucket?: MmdbBucket): Promise<void> {
@@ -156,35 +150,6 @@ async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventR
       row.indexed_at,
       row.source_ip
     )
-    .run();
-}
-
-async function updateRollup(db: D1Database, row: ReturnType<typeof publicEventRow>, width: "hour" | "day", dimension: string, key: string): Promise<void> {
-  const bucket = bucketStart(row.occurred_at, width);
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO rollup_unique_ips (bucket_start, bucket_width, dimension, key, source_ip)
-       VALUES (?, ?, ?, ?, ?)`
-    )
-    .bind(bucket, width, dimension, key, row.source_ip)
-    .run();
-
-  await db
-    .prepare(
-      `INSERT INTO analytics_rollups (bucket_start, bucket_width, dimension, key, count, unique_ips, updated_at)
-       VALUES (?, ?, ?, ?, 1, 1, ?)
-       ON CONFLICT(bucket_start, bucket_width, dimension, key) DO UPDATE SET
-         count = count + 1,
-         unique_ips = (
-           SELECT COUNT(*) FROM rollup_unique_ips
-           WHERE bucket_start = excluded.bucket_start
-             AND bucket_width = excluded.bucket_width
-             AND dimension = excluded.dimension
-             AND key = excluded.key
-         ),
-         updated_at = excluded.updated_at`
-    )
-    .bind(bucket, width, dimension, key, row.indexed_at)
     .run();
 }
 
@@ -277,13 +242,25 @@ export async function indexStoredEvent(
   }
 
   for (const width of ["hour", "day"] as const) {
-    await updateRollup(db, row, width, "event_kind", row.event_kind);
-    await updateRollup(db, row, width, "protocol", row.protocol);
-    await updateRollup(db, row, width, "trap", row.trap);
-    await updateRollup(db, row, width, "severity", String(row.severity));
-    if (row.destination_port !== null) await updateRollup(db, row, width, "destination_port", String(row.destination_port));
-    if (row.tcp_flags) await updateRollup(db, row, width, "tcp_flags", row.tcp_flags);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "event_kind", row.event_kind);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "protocol", row.protocol);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "trap", row.trap);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "severity", String(row.severity));
+    if (row.destination_port !== null) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "destination_port", String(row.destination_port));
+    }
+    if (row.tcp_flags) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "tcp_flags", row.tcp_flags);
+    }
+    for (const tag of parseList(row.tags_json)) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "tag", tag);
+    }
+    for (const reason of parseList(row.confidence_reasons_json)) {
+      await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "confidence_reason", reason);
+    }
   }
+
+  await touchIngestWatermark(db, row.occurred_at, row.received_at, row.indexed_at);
 
   return liveEventFromRow(row);
 }

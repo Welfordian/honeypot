@@ -13,6 +13,7 @@
     "dev": "concurrently -n r2,webtrap,tcp,dashboard -c blue,yellow,cyan,green \"npm run dev -w @honeypot/r2-writer\" \"npm run dev -w @honeypot/trap-web\" \"npm run dev -w @honeypot/tcp-traps\" \"npm run dev -w @honeypot/dashboard\"",
     "dev:vps": "concurrently -n r2,webtrap,tcp -c blue,yellow,cyan \"npm run dev -w @honeypot/r2-writer\" \"npm run dev -w @honeypot/trap-web\" \"npm run dev -w @honeypot/tcp-traps\"",
     "dev:dashboard": "npm run dev -w @honeypot/dashboard",
+    "dev:cloudflare": "bash scripts/dev-dashboard.sh",
     "test": "vitest run",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.cloudflare.json",
     "verify": "npm run typecheck && npm test && npm run build"

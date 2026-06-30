@@ -1,5 +1,6 @@
 import type { Env, R2NotificationBody, StoredR2Event } from "./types.js";
 import { backfillEnrichment } from "./backfillEnrichment.js";
+import { backfillRollups } from "./backfillRollups.js";
 import { deliverHuntWebhooks } from "./deliverHunts.js";
 import { handleHuntRulesAdmin, handleWebhookSubscriptionsAdmin } from "./huntAdmin.js";
 import { indexStoredEvent } from "./indexEvent.js";
@@ -175,6 +176,14 @@ export default {
       const body = (await request.json().catch(() => ({}))) as { limit?: number };
       const limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : 200;
       return json(await backfillEnrichment(env, limit));
+    }
+
+    if (url.pathname === "/internal/admin/backfill-rollups" && request.method === "POST") {
+      const token = request.headers.get("x-indexer-token");
+      if (!env.INDEXER_ADMIN_TOKEN || token !== env.INDEXER_ADMIN_TOKEN) return json({ error: "unauthorized" }, { status: 401 });
+      const body = (await request.json().catch(() => ({}))) as { days?: number };
+      const days = typeof body.days === "number" && body.days > 0 ? Math.min(body.days, 90) : 30;
+      return json(await backfillRollups(env, days));
     }
 
     return json({ error: "not_found" }, { status: 404 });

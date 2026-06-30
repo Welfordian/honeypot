@@ -1,5 +1,6 @@
 import type { PagesCtx } from "../../../_lib/env";
 import { cachedJson } from "../../../_lib/http";
+import { sumRollupEventTotals } from "../../../_lib/rollups";
 import { isOperationalSensorId, sensorStatusFromLastSeen } from "../../../_lib/sensorStatus";
 
 interface SensorRow {
@@ -9,6 +10,8 @@ interface SensorRow {
   last_trap: string;
   event_count: number;
 }
+
+const OPS_CACHE = { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } };
 
 export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const since24h = "-24 hours";
@@ -22,8 +25,7 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
        LIMIT 100`
     ).all<SensorRow>(),
     ctx.env.DB.prepare(
-      `SELECT MAX(occurred_at) AS last_event_at, MAX(received_at) AS last_received_at
-       FROM events`
+      `SELECT last_event_at, last_received_at FROM ingest_watermark WHERE id = 1`
     ).first<{ last_event_at: string | null; last_received_at: string | null }>(),
     ctx.env.DB.prepare(
       `SELECT
@@ -34,11 +36,7 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
        FROM pcap_chunks
        WHERE uploaded_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
     ).bind(since24h).first(),
-    ctx.env.DB.prepare(
-      `SELECT COUNT(*) AS events, COUNT(DISTINCT source_ip) AS unique_ips
-       FROM events
-       WHERE occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-    ).bind(since24h).first()
+    sumRollupEventTotals(ctx.env.DB, since24h)
   ]);
 
   const now = Date.now();
@@ -49,10 +47,13 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
       status: sensorStatusFromLastSeen(sensor.last_seen, now)
     }));
 
-  return cachedJson({
-    sensors,
-    ingest: ingest ?? { last_event_at: null, last_received_at: null },
-    capture: capture ?? { chunks_24h: 0, packets_24h: 0, bytes_24h: 0, expiring_soon: 0 },
-    totals24h: totals24h ?? { events: 0, unique_ips: 0 }
-  });
+  return cachedJson(
+    {
+      sensors,
+      ingest: ingest ?? { last_event_at: null, last_received_at: null },
+      capture: capture ?? { chunks_24h: 0, packets_24h: 0, bytes_24h: 0, expiring_soon: 0 },
+      totals24h
+    },
+    OPS_CACHE
+  );
 };
