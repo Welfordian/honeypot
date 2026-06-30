@@ -18,12 +18,12 @@ apps/dashboard/dist/
 *.key
 *.crt
 *.p12
-certs/
+/certs/
 
 # Runtime capture/log data
-data/
-tmp/
-spool/
+/data/
+/tmp/
+/spool/
 *.pcap
 *.pcap.gz
 *.log
@@ -32,7 +32,7 @@ sensors/cowrie/var/
 sensors/cowrie/log/
 
 # Test/coverage output
-coverage/
+/coverage/
 
 # OS/editor noise
 .DS_Store
