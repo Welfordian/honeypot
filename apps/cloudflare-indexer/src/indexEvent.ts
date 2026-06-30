@@ -1,4 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import type { MmdbBucket } from "../../../functions/_lib/ipinfoMmdb.js";
 import type { LiveEvent, StoredR2Event } from "./types.js";
 import { enrichIpProfile } from "../../../functions/_lib/enrichment.js";
 import { publicEventRow } from "./publicEvent.js";
@@ -69,7 +70,7 @@ function bucketStart(iso: string, width: "hour" | "day"): string {
   return date.toISOString();
 }
 
-async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventRow>): Promise<void> {
+async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventRow>, bucket?: MmdbBucket): Promise<void> {
   const existing = await db
     .prepare("SELECT first_seen, last_seen, event_count, score, unique_traps_json, protocols_json, confidence, confidence_reasons_json FROM ip_profiles WHERE source_ip = ?")
     .bind(row.source_ip)
@@ -107,7 +108,7 @@ async function updateProfile(db: D1Database, row: ReturnType<typeof publicEventR
       .run();
 
     try {
-      await enrichIpProfile(db, row.source_ip);
+      await enrichIpProfile(db, row.source_ip, bucket ? { bucket } : {});
     } catch (error) {
       console.warn("IP enrichment failed", row.source_ip, error);
     }
@@ -187,7 +188,12 @@ async function updateRollup(db: D1Database, row: ReturnType<typeof publicEventRo
     .run();
 }
 
-export async function indexStoredEvent(db: D1Database, event: StoredR2Event, r2Key: string): Promise<LiveEvent | null> {
+export async function indexStoredEvent(
+  db: D1Database,
+  event: StoredR2Event,
+  r2Key: string,
+  bucket?: MmdbBucket
+): Promise<LiveEvent | null> {
   const indexedAt = new Date().toISOString();
   const row = publicEventRow(event, r2Key, indexedAt);
 
@@ -239,7 +245,7 @@ export async function indexStoredEvent(db: D1Database, event: StoredR2Event, r2K
 
   if (!insert.meta.changes) return null;
 
-  await updateProfile(db, row);
+  await updateProfile(db, row, bucket);
 
   if (isOperationalSensorId(row.sensor_id)) {
     await db

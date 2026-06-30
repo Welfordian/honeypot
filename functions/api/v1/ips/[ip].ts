@@ -46,7 +46,7 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   if (!profile) return json({ error: "not_found" }, { status: 404 });
 
   if (enrich && needsEnrichment(profile)) {
-    await enrichIpProfile(ctx.env.DB, ip);
+    await enrichIpProfile(ctx.env.DB, ip, { bucket: ctx.env.EVENTS_BUCKET });
     profile = await ctx.env.DB.prepare(
       `SELECT source_ip, first_seen, last_seen, event_count, score, confidence, confidence_reasons_json,
          unique_traps_json, protocols_json, last_trap, last_protocol, country_code, asn, as_name

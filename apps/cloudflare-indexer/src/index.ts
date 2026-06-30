@@ -1,8 +1,10 @@
 import type { Env, R2NotificationBody, StoredR2Event } from "./types.js";
+import { backfillEnrichment } from "./backfillEnrichment.js";
 import { indexStoredEvent } from "./indexEvent.js";
 import { handleIngest, handlePcapIngest } from "./ingest.js";
 import { publishLiveEvent } from "./live.js";
 import { recomputeConfidence } from "./recompute.js";
+import { syncIpinfoMmdb } from "./syncIpinfoMmdb.js";
 
 function json(body: unknown, init?: ResponseInit): Response {
   const headers = new Headers(init?.headers);
@@ -24,7 +26,7 @@ async function readEvent(env: Env, key: string): Promise<StoredR2Event> {
 async function indexKey(env: Env, key: string): Promise<void> {
   if (key.startsWith(`${env.PCAP_PREFIX ?? "private-pcap"}/`)) return;
   const event = await readEvent(env, key);
-  await publishLiveEvent(env, await indexStoredEvent(env.DB, event, key));
+  await publishLiveEvent(env, await indexStoredEvent(env.DB, event, key, env.EVENTS_BUCKET));
 }
 
 function suppressedSourceIps(env: Env): string[] {
@@ -141,6 +143,20 @@ export default {
       return json(await recomputeConfidence(env, body));
     }
 
+    if (url.pathname === "/internal/admin/sync-ipinfo-mmdb" && request.method === "POST") {
+      const token = request.headers.get("x-indexer-token");
+      if (!env.INDEXER_ADMIN_TOKEN || token !== env.INDEXER_ADMIN_TOKEN) return json({ error: "unauthorized" }, { status: 401 });
+      return json(await syncIpinfoMmdb(env));
+    }
+
+    if (url.pathname === "/internal/admin/backfill-enrichment" && request.method === "POST") {
+      const token = request.headers.get("x-indexer-token");
+      if (!env.INDEXER_ADMIN_TOKEN || token !== env.INDEXER_ADMIN_TOKEN) return json({ error: "unauthorized" }, { status: 401 });
+      const body = (await request.json().catch(() => ({}))) as { limit?: number };
+      const limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : 200;
+      return json(await backfillEnrichment(env, limit));
+    }
+
     return json({ error: "not_found" }, { status: 404 });
   },
 
@@ -157,5 +173,8 @@ export default {
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(expirePcapChunks(env));
+    if (env.IPINFO_TOKEN) {
+      ctx.waitUntil(syncIpinfoMmdb(env).catch((error) => console.error("IPinfo MMDB sync failed", error)));
+    }
   }
 };

@@ -5,5 +5,5 @@
     "lib": ["ES2022", "WebWorker"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "../../functions/_lib/enrichment.ts"]
+  "include": ["src/**/*.ts", "../../functions/_lib/enrichment.ts", "../../functions/_lib/ipinfoMmdb.ts"]
 }

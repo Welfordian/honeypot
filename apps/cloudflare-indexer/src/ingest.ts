@@ -460,7 +460,7 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
     });
 
     try {
-      await publishLiveEvent(env, await indexStoredEvent(env.DB, stored, key));
+      await publishLiveEvent(env, await indexStoredEvent(env.DB, stored, key, env.EVENTS_BUCKET));
     } catch (error) {
       console.error("direct D1 index failed; queue notification will retry", { key, error });
     }

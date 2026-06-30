@@ -83,6 +83,17 @@ export function Sidebar({ className }: { className?: string }) {
             <Github className="h-4 w-4" />
             GitHub
           </a>
+          <p className="px-3 py-1.5 text-xs text-muted-foreground">
+            IP data by{" "}
+            <a
+              href="https://ipinfo.io/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-4 hover:underline"
+            >
+              IPinfo
+            </a>
+          </p>
         </div>
       </div>
     </aside>

@@ -31,6 +31,36 @@ Configure:
 - R2 event notifications to the `honeypot-r2-events` queue if Wrangler does not create them automatically.
 - PCAP chunks remain under the private `private-pcap/` R2 prefix and expire after 14 days via the indexer cron.
 
+### IPinfo MMDB bootstrap
+
+Country/ASN enrichment reads `geo/ipinfo_lite.mmdb` from the `honeypot-events` R2 bucket. Set an IPinfo API token on the indexer:
+
+```sh
+npx wrangler secret put IPINFO_TOKEN -c apps/cloudflare-indexer/wrangler.jsonc
+```
+
+Manual bootstrap (first deploy or if the cron has not run yet):
+
+```sh
+curl -L "https://ipinfo.io/data/ipinfo_lite.mmdb?token=$IPINFO_TOKEN" -o /tmp/ipinfo_lite.mmdb
+npx wrangler r2 object put honeypot-events/geo/ipinfo_lite.mmdb --file /tmp/ipinfo_lite.mmdb --content-type application/octet-stream
+```
+
+Or use the helper script:
+
+```sh
+IPINFO_TOKEN=... ./scripts/sync-ipinfo-mmdb.sh
+```
+
+Backfill enrichment for existing IP profiles after the MMDB is in R2:
+
+```sh
+curl -X POST "https://honeypot-r2-indexer.example.workers.dev/internal/admin/backfill-enrichment" \
+  -H "x-indexer-token: $INDEXER_ADMIN_TOKEN"
+```
+
+The indexer cron syncs the MMDB from IPinfo daily once `IPINFO_TOKEN` is configured.
+
 ## VPS
 
 The VPS is only for the honeypot.

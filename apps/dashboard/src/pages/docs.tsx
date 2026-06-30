@@ -161,7 +161,13 @@ const sections: Section[] = [
         description: "Single IP profile with cursor-paginated events. Legacy alias: /api/ips/:ip.",
         params: [
           { name: "limit", type: "integer", default: "100", description: "Event page size (1–250)." },
-          { name: "cursor", type: "string", description: "Pagination cursor from next_cursor." }
+          { name: "cursor", type: "string", description: "Pagination cursor from next_cursor." },
+          {
+            name: "enrich",
+            type: "boolean",
+            description:
+              '"true" to look up missing country/ASN fields on demand via the IPinfo Lite MMDB in R2.'
+          }
         ],
         response: "{ profile: IpProfile, events: EventRow[], next_cursor: string | null }",
         cache: CACHED,
@@ -575,6 +581,36 @@ export function DocsPage() {
             <p>
               No explicit rate limiting is configured. Respect cache headers and use reasonable{" "}
               <code className="font-mono text-xs">limit</code> values. Invalid query parameters return HTTP 400.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Data sources</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Country and ASN enrichment uses the{" "}
+              <a
+                href="https://ipinfo.io/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                IPinfo Lite
+              </a>{" "}
+              MMDB (CC BY-SA 4.0). The database is stored in R2 at{" "}
+              <code className="font-mono text-xs">geo/ipinfo_lite.mmdb</code> and refreshed daily by the
+              indexer cron.
+            </p>
+            <p>
+              IP profiles include <code className="font-mono text-xs">country_code</code>,{" "}
+              <code className="font-mono text-xs">asn</code>, and{" "}
+              <code className="font-mono text-xs">as_name</code> when enrichment is available. Pass{" "}
+              <code className="font-mono text-xs">enrich=true</code> on{" "}
+              <code className="font-mono text-xs">GET /api/v1/ips/:ip</code> to fill missing fields on
+              demand.
             </p>
           </CardContent>
         </Card>

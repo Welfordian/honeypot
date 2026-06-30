@@ -3,9 +3,9 @@ import {
   enrichmentFromRow,
   isEnrichablePublicIp,
   isValidIpAddress,
-  needsEnrichment,
-  parseIpWhoResponse
+  needsEnrichment
 } from "./enrichment";
+import { parseIpinfoLiteRecord } from "./ipinfoMmdb";
 
 describe("isValidIpAddress", () => {
   it("accepts public IPv4 and IPv6", () => {
@@ -45,13 +45,13 @@ describe("needsEnrichment", () => {
   });
 });
 
-describe("parseIpWhoResponse", () => {
-  it("maps ipwho.is fields to enrichment metadata", () => {
+describe("parseIpinfoLiteRecord", () => {
+  it("maps IPinfo Lite fields to enrichment metadata", () => {
     expect(
-      parseIpWhoResponse({
-        success: true,
+      parseIpinfoLiteRecord({
         country_code: "us",
-        connection: { asn: 15169, org: "Google LLC" }
+        asn: "AS15169",
+        as_name: "Google LLC"
       })
     ).toEqual({
       country_code: "US",
@@ -60,9 +60,9 @@ describe("parseIpWhoResponse", () => {
     });
   });
 
-  it("returns null for unsuccessful responses", () => {
-    expect(parseIpWhoResponse({ success: false })).toBeNull();
-    expect(parseIpWhoResponse(null)).toBeNull();
+  it("returns null for empty records", () => {
+    expect(parseIpinfoLiteRecord({})).toBeNull();
+    expect(parseIpinfoLiteRecord(null)).toBeNull();
   });
 });
 

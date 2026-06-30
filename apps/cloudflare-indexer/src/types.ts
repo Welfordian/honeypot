@@ -3,6 +3,7 @@ export interface Env {
   DB: D1Database;
   LIVE_STREAM?: Fetcher;
   INDEXER_ADMIN_TOKEN?: string;
+  IPINFO_TOKEN?: string;
   INGEST_HMAC_SECRET?: string;
   R2_PREFIX?: string;
   PCAP_PREFIX?: string;

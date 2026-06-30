@@ -1,4 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import { createMmdbFetcher, type MmdbBucket } from "./ipinfoMmdb";
 
 export interface IpEnrichmentFields {
   country_code: string | null;
@@ -126,55 +127,19 @@ export function enrichmentFromRow(row: {
   };
 }
 
-interface IpWhoResponse {
-  success?: boolean;
-  country_code?: string;
-  connection?: {
-    asn?: number;
-    org?: string;
-  };
-}
-
-export function parseIpWhoResponse(body: unknown): IpEnrichmentFields | null {
-  const data = body as IpWhoResponse;
-  if (!data?.success) return null;
-
-  const country = typeof data.country_code === "string" ? data.country_code.trim().toUpperCase() : "";
-  const asn = typeof data.connection?.asn === "number" && Number.isFinite(data.connection.asn)
-    ? Math.trunc(data.connection.asn)
-    : null;
-  const asName = typeof data.connection?.org === "string" ? data.connection.org.trim() : "";
-
-  if (!country && asn === null && !asName) return null;
-
-  return {
-    country_code: country || null,
-    asn,
-    as_name: asName || null
-  };
-}
-
-export async function fetchEnrichmentFromIpWho(ip: string, timeoutMs = 3000): Promise<IpEnrichmentFields | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, {
-      signal: controller.signal,
-      headers: { accept: "application/json" }
-    });
-    if (!response.ok) return null;
-    return parseIpWhoResponse(await response.json());
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+function resolveFetcher(
+  bucket: MmdbBucket | undefined,
+  fetcher: EnrichmentFetcher | undefined
+): EnrichmentFetcher | null {
+  if (fetcher) return fetcher;
+  if (bucket) return createMmdbFetcher(bucket);
+  return null;
 }
 
 export async function enrichIpProfile(
   db: D1Database,
   ip: string,
-  options: { fetcher?: EnrichmentFetcher; force?: boolean } = {}
+  options: { bucket?: MmdbBucket; fetcher?: EnrichmentFetcher; force?: boolean } = {}
 ): Promise<IpEnrichmentFields | null> {
   if (!isEnrichablePublicIp(ip)) return null;
 
@@ -186,7 +151,10 @@ export async function enrichIpProfile(
   if (!existing) return null;
   if (!options.force && !needsEnrichment(existing)) return enrichmentFromRow(existing);
 
-  const fetched = await (options.fetcher ?? fetchEnrichmentFromIpWho)(ip);
+  const fetcher = resolveFetcher(options.bucket, options.fetcher);
+  if (!fetcher) return enrichmentFromRow(existing);
+
+  const fetched = await fetcher(ip);
   if (!fetched) return enrichmentFromRow(existing);
 
   await db

@@ -33,5 +33,9 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "mmdb-lib": "^3.0.2"
   }
 }
