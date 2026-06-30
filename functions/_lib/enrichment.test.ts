@@ -42,6 +42,7 @@ describe("needsEnrichment", () => {
     expect(needsEnrichment({ country_code: "US" })).toBe(false);
     expect(needsEnrichment({ asn: 15169 })).toBe(false);
     expect(needsEnrichment({ as_name: "Google LLC" })).toBe(false);
+    expect(needsEnrichment({ as_name: "" })).toBe(false);
   });
 });
 

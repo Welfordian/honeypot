@@ -155,7 +155,13 @@ export async function enrichIpProfile(
   if (!fetcher) return enrichmentFromRow(existing);
 
   const fetched = await fetcher(ip);
-  if (!fetched) return enrichmentFromRow(existing);
+  if (!fetched) {
+    await db
+      .prepare("UPDATE ip_profiles SET as_name = '' WHERE source_ip = ?")
+      .bind(ip)
+      .run();
+    return { country_code: null, asn: null, as_name: "" };
+  }
 
   await db
     .prepare("UPDATE ip_profiles SET country_code = ?, asn = ?, as_name = ? WHERE source_ip = ?")
