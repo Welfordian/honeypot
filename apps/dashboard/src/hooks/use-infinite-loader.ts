@@ -1,29 +1,50 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useInfiniteLoader(
   hasMore: boolean,
   loading: boolean,
   onLoadMore: () => void
 ) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const hasMoreRef = useRef(hasMore);
+  const loadingRef = useRef(loading);
+  const onLoadMoreRef = useRef(onLoadMore);
+  const triggeredForCurrentEntryRef = useRef(false);
 
   useEffect(() => {
-    if (!hasMore || loading) return;
-    const node = ref.current;
+    hasMoreRef.current = hasMore;
+    loadingRef.current = loading;
+    onLoadMoreRef.current = onLoadMore;
+    if (!hasMore) triggeredForCurrentEntryRef.current = false;
+  }, [hasMore, loading, onLoadMore]);
+
+  useEffect(() => {
     if (!node) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          observer.disconnect();
-          onLoadMore();
+        const isIntersecting = entries.some((entry) => entry.isIntersecting);
+        if (!isIntersecting) {
+          triggeredForCurrentEntryRef.current = false;
+          return;
+        }
+
+        if (
+          hasMoreRef.current &&
+          !loadingRef.current &&
+          !triggeredForCurrentEntryRef.current
+        ) {
+          triggeredForCurrentEntryRef.current = true;
+          onLoadMoreRef.current();
         }
       },
       { rootMargin: "360px 0px" }
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, loading, onLoadMore]);
+  }, [node]);
 
-  return ref;
+  return useCallback((element: HTMLDivElement | null) => {
+    setNode(element);
+  }, []);
 }

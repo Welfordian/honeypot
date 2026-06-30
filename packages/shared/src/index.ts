@@ -141,6 +141,12 @@ export interface ConfidenceResult {
   reasons: string[];
 }
 
+const NON_OPERATIONAL_SENSOR_IDS = new Set(["deployment-self-test"]);
+
+export function isOperationalSensorId(sensorId: string): boolean {
+  return !NON_OPERATIONAL_SENSOR_IDS.has(sensorId);
+}
+
 const HIGH_RISK_PROTOCOLS = new Set(["ssh", "telnet", "mysql", "mssql", "redis", "smb", "rdp", "vnc", "ftp"]);
 const SENSITIVE_PATH_PATTERN = /(wp-login|wp-admin|phpmyadmin|\.env|\.git|metadata|jenkins|grafana|kubernetes|docker|laravel|actuator|config|backup|admin|login)/i;
 const EXPLOIT_PATH_PATTERN = /(\.\.\/|%2e%2e|cgi-bin|eval\(|base64_decode|select.+from|union.+select|cmd=|exec=|shell|jndi:|struts|thinkphp|boaform|vendor\/phpunit)/i;

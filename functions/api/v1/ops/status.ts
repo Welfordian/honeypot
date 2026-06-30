@@ -1,6 +1,6 @@
 import type { PagesCtx } from "../../../_lib/env";
 import { cachedJson } from "../../../_lib/http";
-import { sensorStatusFromLastSeen } from "../../../_lib/sensorStatus";
+import { isOperationalSensorId, sensorStatusFromLastSeen } from "../../../_lib/sensorStatus";
 
 interface SensorRow {
   sensor_id: string;
@@ -42,10 +42,12 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   ]);
 
   const now = Date.now();
-  const sensors = sensorRows.results.map((sensor) => ({
-    ...sensor,
-    status: sensorStatusFromLastSeen(sensor.last_seen, now)
-  }));
+  const sensors = sensorRows.results
+    .filter((sensor) => isOperationalSensorId(sensor.sensor_id))
+    .map((sensor) => ({
+      ...sensor,
+      status: sensorStatusFromLastSeen(sensor.last_seen, now)
+    }));
 
   return cachedJson({
     sensors,

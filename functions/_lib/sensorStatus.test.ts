@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sensorStatusFromLastSeen, worstSensorStatus } from "./sensorStatus";
+import { isOperationalSensorId, sensorStatusFromLastSeen, worstSensorStatus } from "./sensorStatus";
 
 describe("sensorStatusFromLastSeen", () => {
   const now = Date.parse("2026-06-30T12:00:00.000Z");
@@ -22,5 +22,12 @@ describe("worstSensorStatus", () => {
     expect(worstSensorStatus(["ok", "warning", "stale"])).toBe("stale");
     expect(worstSensorStatus(["ok", "warning"])).toBe("warning");
     expect(worstSensorStatus(["ok", "ok"])).toBe("ok");
+  });
+});
+
+describe("isOperationalSensorId", () => {
+  it("excludes one-off deployment self-tests from sensor health", () => {
+    expect(isOperationalSensorId("deployment-self-test")).toBe(false);
+    expect(isOperationalSensorId("desktopc-network-1")).toBe(true);
   });
 });

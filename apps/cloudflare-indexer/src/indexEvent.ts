@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { LiveEvent, StoredR2Event } from "./types.js";
 import { publicEventRow } from "./publicEvent.js";
-import { confidenceForProfile } from "@honeypot/shared";
+import { confidenceForProfile, isOperationalSensorId } from "@honeypot/shared";
 
 interface IpProfileRow {
   first_seen: string;
@@ -234,19 +234,21 @@ export async function indexStoredEvent(db: D1Database, event: StoredR2Event, r2K
 
   await updateProfile(db, row);
 
-  await db
-    .prepare(
-      `INSERT INTO sensor_health (sensor_id, last_seen, last_protocol, last_trap, event_count, updated_at)
-       VALUES (?, ?, ?, ?, 1, ?)
-       ON CONFLICT(sensor_id) DO UPDATE SET
-         last_seen = excluded.last_seen,
-         last_protocol = excluded.last_protocol,
-         last_trap = excluded.last_trap,
-         event_count = event_count + 1,
-         updated_at = excluded.updated_at`
-    )
-    .bind(row.sensor_id, row.occurred_at, row.protocol, row.trap, row.indexed_at)
-    .run();
+  if (isOperationalSensorId(row.sensor_id)) {
+    await db
+      .prepare(
+        `INSERT INTO sensor_health (sensor_id, last_seen, last_protocol, last_trap, event_count, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?)
+         ON CONFLICT(sensor_id) DO UPDATE SET
+           last_seen = excluded.last_seen,
+           last_protocol = excluded.last_protocol,
+           last_trap = excluded.last_trap,
+           event_count = event_count + 1,
+           updated_at = excluded.updated_at`
+      )
+      .bind(row.sensor_id, row.occurred_at, row.protocol, row.trap, row.indexed_at)
+      .run();
+  }
 
   if (row.payload_sha256) {
     await db

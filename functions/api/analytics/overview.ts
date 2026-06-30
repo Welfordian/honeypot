@@ -1,5 +1,6 @@
 import type { PagesCtx } from "../../_lib/env";
 import { json, parseSinceHours, urlOf } from "../../_lib/http";
+import { isOperationalSensorId } from "../../_lib/sensorStatus";
 
 export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const url = urlOf(ctx.request);
@@ -48,6 +49,8 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
     topProtocols: topProtocols.results,
     topTraps: topTraps.results,
     topSeverities: topSeverities.results,
-    sensors: sensors.results
+    sensors: sensors.results.filter((sensor) =>
+      typeof sensor.sensor_id === "string" && isOperationalSensorId(sensor.sensor_id)
+    )
   }, { headers: { "cache-control": "public, max-age=10" } });
 };

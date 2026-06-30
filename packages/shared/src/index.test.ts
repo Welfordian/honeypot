@@ -3,6 +3,7 @@ import {
   HONEYPOT_EVENT_SCHEMA,
   confidenceForEvent,
   confidenceForProfile,
+  isOperationalSensorId,
   redactHeaders,
   safePreview,
   scoreEvent,
@@ -39,6 +40,11 @@ describe("shared safety helpers", () => {
     const signature = signBody("secret", "2026-06-29T12:00:00.000Z", "{\"ok\":true}");
     expect(verifySignature("secret", "2026-06-29T12:00:00.000Z", "{\"ok\":true}", signature)).toBe(true);
     expect(verifySignature("secret", "2026-06-29T12:00:00.000Z", "{\"ok\":false}", signature)).toBe(false);
+  });
+
+  it("does not treat one-off deployment checks as operational sensors", () => {
+    expect(isOperationalSensorId("deployment-self-test")).toBe(false);
+    expect(isOperationalSensorId("desktopc-network-1")).toBe(true);
   });
 
   it("assigns confidence reasons for exploit-like probes", () => {
