@@ -1,6 +1,13 @@
 # Copy to .dev.vars for local Pages Functions / wrangler pages dev (not committed).
 # Generate tokens: openssl rand -hex 32
 
+# Remote Cloudflare dev (`npm run dev:cloudflare -- --remote`).
+# Optional: if omitted, the dev script discovers this from `wrangler d1 list`.
+D1_DATABASE_ID=
+
+# Optional: use a comma-separated list to override the doc-reserved placeholder in dev config.
+SUPPRESSED_SOURCE_IPS=
+
 # Hunts admin proxy (optional — only needed to test /api/v1/admin/hunts locally)
 INDEXER_URL=https://honeypot-r2-indexer.example.workers.dev
 INDEXER_ADMIN_TOKEN=
