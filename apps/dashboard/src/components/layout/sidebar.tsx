@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpen,
   Crosshair,
   Download,
   FileWarning,
@@ -23,7 +24,8 @@ export const navItems = [
   { to: "/ips", label: "IPs", icon: Network },
   { to: "/payloads", label: "Payloads", icon: FileWarning },
   { to: "/health", label: "Health", icon: HeartPulse },
-  { to: "/exports", label: "Exports", icon: Download }
+  { to: "/exports", label: "Exports", icon: Download },
+  { to: "/docs", label: "API", icon: BookOpen }
 ] as const;
 
 const GITHUB_URL = "https://github.com/Welfordian/honeypot";

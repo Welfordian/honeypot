@@ -8,7 +8,9 @@ const LEGACY_VIEW_MAP: Record<string, string> = {
   payloads: "/payloads",
   exports: "/exports",
   intel: "/intel",
-  health: "/health"
+  health: "/health",
+  docs: "/docs",
+  api: "/docs"
 };
 
 export function LegacyViewRedirect() {

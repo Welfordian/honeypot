@@ -100,4 +100,25 @@
       opacity: 0.4;
     }
   }
+
+  .recharts-bar .recharts-tooltip-cursor {
+    fill: transparent;
+  }
+
+  .recharts-area .recharts-tooltip-cursor,
+  .recharts-line .recharts-tooltip-cursor {
+    fill: rgba(30, 46, 40, 0.25);
+  }
+
+  .recharts-default-tooltip {
+    background-color: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem;
+    color: var(--foreground);
+  }
+
+  .recharts-tooltip-label,
+  .recharts-tooltip-item {
+    color: var(--foreground) !important;
+  }
 }

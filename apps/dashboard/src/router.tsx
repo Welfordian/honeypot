@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/app-shell";
 import { EventsPage } from "@/pages/events";
+import { DocsPage } from "@/pages/docs";
 import { ExportsPage } from "@/pages/exports";
 import { HealthPage } from "@/pages/health";
 import { IntelPage } from "@/pages/intel";
@@ -37,6 +38,8 @@ export const router = createBrowserRouter([
       { path: "payloads/:sha256", element: <PayloadDetailPage /> },
       { path: "health", element: <HealthPage /> },
       { path: "exports", element: <ExportsPage /> },
+      { path: "docs", element: <DocsPage /> },
+      { path: "api", element: <Navigate to="/docs" replace /> },
       { path: "*", element: <Navigate to="/" replace /> }
     ]
   }
