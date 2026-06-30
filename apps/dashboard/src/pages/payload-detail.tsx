@@ -1,5 +1,4 @@
 import { FileWarning, Network, ShieldAlert, Signal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BarChartPanel } from "@/components/data/charts/bar-chart-panel";
 import { TimelineChart } from "@/components/data/charts/timeline-chart";
@@ -9,6 +8,7 @@ import { EventsTable } from "@/components/data/events-table";
 import { InfiniteLoader } from "@/components/data/infinite-loader";
 import { MetricCard } from "@/components/data/metric-card";
 import { SeverityBadge } from "@/components/data/severity-badge";
+import { EventDetailSheet } from "@/components/investigation/event-detail-sheet";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,70 +21,25 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/lib/api";
-import { formatTime, mergeByKey, shortHash } from "@/lib/utils";
-import type { PayloadDetail, TimelinePoint } from "@/types/api";
+import { useEventInspector } from "@/hooks/use-event-inspector";
+import { usePayloadDetailInfinite } from "@/hooks/use-queries";
+import { buildSearchUrl } from "@/lib/investigation-links";
+import { formatTime, shortHash } from "@/lib/utils";
 
 export function PayloadDetailPage() {
   const { sha256: rawSha } = useParams<{ sha256: string }>();
   const sha256 = rawSha?.toLowerCase() ?? "";
+  const { selectedEvent, openEvent, closeEvent } = useEventInspector();
 
-  const [data, setData] = useState<PayloadDetail | null>(null);
-  const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setData(null);
-    setTimeline([]);
-    setNextCursor(null);
-    setError("");
-    setLoading(true);
-
-    Promise.all([
-      api.get<PayloadDetail>(`/api/v1/payloads/${encodeURIComponent(sha256)}?limit=100`),
-      api.get<{ timeline: TimelinePoint[] }>(
-        `/api/v1/payloads/${encodeURIComponent(sha256)}/timeline?sinceHours=168`
-      )
-    ])
-      .then(([detail, timelineResponse]) => {
-        if (cancelled) return;
-        setData(detail);
-        setNextCursor(detail.next_cursor);
-        setTimeline(timelineResponse.timeline);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load payload detail.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sha256]);
-
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const response = await api.get<PayloadDetail>(
-        `/api/v1/payloads/${encodeURIComponent(sha256)}?limit=100&cursor=${encodeURIComponent(nextCursor)}`
-      );
-      setData((current) =>
-        current
-          ? { ...current, events: mergeByKey(current.events, response.events, (event) => event.id) }
-          : current
-      );
-      setNextCursor(response.next_cursor);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, nextCursor, sha256]);
+  const {
+    data,
+    timeline,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    error
+  } = usePayloadDetailInfinite(sha256);
 
   return (
     <>
@@ -97,8 +52,12 @@ export function PayloadDetailPage() {
           <span className="font-mono text-sm text-muted-foreground">{shortHash(sha256)}</span>
         </div>
 
-        {error && <ErrorBanner message={error} />}
-        {loading ? (
+        {error && (
+          <ErrorBanner
+            message={error instanceof Error ? error.message : "Failed to load payload detail."}
+          />
+        )}
+        {isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-20" />
@@ -147,6 +106,24 @@ export function PayloadDetailPage() {
               </CardContent>
             </Card>
 
+            <Card>
+              <CardHeader>
+                <CardTitle>Related searches</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={buildSearchUrl({ payloadHash: sha256 })}>All events with this payload</Link>
+                </Button>
+                {data.traps[0] && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={buildSearchUrl({ payloadHash: sha256, trap: data.traps[0].key })}>
+                      Same payload + top trap
+                    </Link>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
             <TimelineChart title="Payload Timeline" data={timeline} />
             <div className="grid gap-4 lg:grid-cols-2">
               <BarChartPanel title="Protocols" data={data.protocols} height={180} />
@@ -192,12 +169,13 @@ export function PayloadDetailPage() {
               </CardContent>
             </Card>
 
-            <EventsTable events={data.events} />
+            <EventsTable events={data.events} onSelectEvent={openEvent} />
             <InfiniteLoader
-              hasMore={Boolean(nextCursor)}
-              loading={loadingMore}
-              onLoadMore={() => void loadMore()}
+              hasMore={Boolean(hasNextPage)}
+              loading={isFetchingNextPage}
+              onLoadMore={() => void fetchNextPage()}
             />
+            <EventDetailSheet event={selectedEvent} onClose={closeEvent} />
           </>
         )}
       </div>

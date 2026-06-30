@@ -1,7 +1,9 @@
 import { Filter, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { EventsTable } from "@/components/data/events-table";
 import { InfiniteLoader } from "@/components/data/infinite-loader";
+import { EventDetailSheet } from "@/components/investigation/event-detail-sheet";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,15 +14,33 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { DEFAULT_EVENT_FILTERS, useEvents, type EventFilters } from "@/hooks/use-queries";
+import { useEventInspector } from "@/hooks/use-event-inspector";
+import {
+  DEFAULT_EVENT_FILTERS,
+  useEvents,
+  type EventFilters
+} from "@/hooks/use-queries";
+import { filtersFromSearchParams, searchParamsFromFilters } from "@/lib/investigation-links";
+import { CONFIDENCE_REASONS } from "@/types/api";
 
 export function EventsPage() {
-  const [filters, setFilters] = useState<EventFilters>(DEFAULT_EVENT_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<EventFilters>(DEFAULT_EVENT_FILTERS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const appliedFilters = useMemo(
+    () => filtersFromSearchParams(searchParams),
+    [searchParams]
+  );
+  const [filters, setFilters] = useState<EventFilters>(appliedFilters);
+  const { selectedEvent, openEvent, closeEvent } = useEventInspector();
+
+  useEffect(() => {
+    setFilters(appliedFilters);
+  }, [appliedFilters]);
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useEvents(appliedFilters);
 
-  const applyFilters = () => setAppliedFilters({ ...filters });
+  const applyFilters = () => {
+    setSearchParams(searchParamsFromFilters(filters), { replace: true });
+  };
 
   return (
     <>
@@ -63,6 +83,59 @@ export function EventsPage() {
             onChange={(e) => setFilters({ ...filters, destinationPort: e.target.value })}
             className="w-full sm:w-24"
           />
+          <Input
+            aria-label="Tag"
+            placeholder="Tag"
+            value={filters.tag}
+            onChange={(e) => setFilters({ ...filters, tag: e.target.value })}
+            className="w-full sm:w-36"
+          />
+          <Select
+            value={filters.confidenceReason || "any"}
+            onValueChange={(v) =>
+              setFilters({ ...filters, confidenceReason: v === "any" ? "" : v })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-44" aria-label="Confidence reason">
+              <SelectValue placeholder="Any reason" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any reason</SelectItem>
+              {CONFIDENCE_REASONS.map((reason) => (
+                <SelectItem key={reason} value={reason}>
+                  {reason}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            aria-label="Minimum confidence"
+            placeholder="Min conf."
+            value={filters.minConfidence}
+            onChange={(e) => setFilters({ ...filters, minConfidence: e.target.value })}
+            className="w-full sm:w-24"
+          />
+          <Select
+            value={filters.hasCredentials || "any"}
+            onValueChange={(v) =>
+              setFilters({ ...filters, hasCredentials: v === "any" ? "" : v })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-40" aria-label="Credentials filter">
+              <SelectValue placeholder="All events" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">All events</SelectItem>
+              <SelectItem value="true">Credentials only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            aria-label="Payload hash"
+            placeholder="Payload hash"
+            value={filters.payloadHash}
+            onChange={(e) => setFilters({ ...filters, payloadHash: e.target.value })}
+            className="w-full sm:w-44 font-mono text-xs"
+          />
           <Select
             value={filters.aggregate || "both"}
             onValueChange={(v) =>
@@ -89,14 +162,24 @@ export function EventsPage() {
             <Search className="h-4 w-4" />
             Search
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setFilters(DEFAULT_EVENT_FILTERS);
+              setSearchParams({}, { replace: true });
+            }}
+          >
+            Clear
+          </Button>
         </section>
 
-        <EventsTable events={data?.events ?? []} />
+        <EventsTable events={data?.events ?? []} onSelectEvent={openEvent} />
         <InfiniteLoader
           hasMore={Boolean(hasNextPage)}
           loading={isLoading || isFetchingNextPage}
           onLoadMore={() => void fetchNextPage()}
         />
+        <EventDetailSheet event={selectedEvent} onClose={closeEvent} />
       </div>
     </>
   );

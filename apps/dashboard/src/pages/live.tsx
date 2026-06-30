@@ -1,6 +1,8 @@
 import { Signal } from "lucide-react";
 import { EventsTable } from "@/components/data/events-table";
+import { EventDetailSheet } from "@/components/investigation/event-detail-sheet";
 import { PageHeader } from "@/components/layout/page-header";
+import { useEventInspector } from "@/hooks/use-event-inspector";
 import { useLiveStream } from "@/hooks/use-live-stream";
 import { formatTime } from "@/lib/utils";
 import { LIVE_STATUS_LABELS } from "@/types/api";
@@ -15,6 +17,7 @@ const STATUS_DOT: Record<string, string> = {
 
 export function LivePage() {
   const { events, status, lastUpdate } = useLiveStream();
+  const { selectedEvent, openEvent, closeEvent } = useEventInspector();
 
   return (
     <>
@@ -34,7 +37,8 @@ export function LivePage() {
           <span className="font-medium">{LIVE_STATUS_LABELS[status]}</span>
           <span className="text-muted-foreground">Last update {formatTime(lastUpdate)}</span>
         </section>
-        <EventsTable events={events} />
+        <EventsTable events={events} onSelectEvent={openEvent} />
+        <EventDetailSheet event={selectedEvent} onClose={closeEvent} />
       </div>
     </>
   );

@@ -15,6 +15,11 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
   const eventType = token(url.searchParams.get("eventType"), 120);
   const eventKind = token(url.searchParams.get("eventKind"), 48);
   const payloadHash = publicSha256(url.searchParams.get("payloadHash"));
+  const tag = token(url.searchParams.get("tag"), 80);
+  const confidenceReason = token(url.searchParams.get("confidenceReason"), 48);
+  const rawMinConfidence = url.searchParams.get("minConfidence");
+  const minConfidence = rawMinConfidence ? Number(rawMinConfidence) : null;
+  const hasCredentials = url.searchParams.get("hasCredentials");
   const rawDestinationPort = url.searchParams.get("destinationPort");
   const destinationPort = rawDestinationPort ? Number(rawDestinationPort) : null;
   const aggregate = url.searchParams.get("aggregate");
@@ -29,6 +34,16 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
   if (url.searchParams.get("payloadHash") && !payloadHash) return new Response("invalid payload hash", { status: 400 });
   if (destinationPort !== null && (!Number.isInteger(destinationPort) || destinationPort < 0 || destinationPort > 65535)) {
     return new Response("invalid destination port", { status: 400 });
+  }
+  if (url.searchParams.get("tag") && !tag) return new Response("invalid tag", { status: 400 });
+  if (url.searchParams.get("confidenceReason") && !confidenceReason) {
+    return new Response("invalid confidence reason", { status: 400 });
+  }
+  if (
+    minConfidence !== null &&
+    (!Number.isInteger(minConfidence) || minConfidence < 0 || minConfidence > 100)
+  ) {
+    return new Response("invalid minConfidence", { status: 400 });
   }
   if (cursor instanceof Response) return cursor;
   if (ip) {
@@ -62,6 +77,21 @@ export function buildEventsQuery(url: URL): EventsQuery | Response {
   if (payloadHash) {
     where.push("payload_sha256 = ?");
     params.push(payloadHash);
+  }
+  if (tag) {
+    where.push("EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?)");
+    params.push(tag);
+  }
+  if (confidenceReason) {
+    where.push("EXISTS (SELECT 1 FROM json_each(confidence_reasons_json) WHERE value = ?)");
+    params.push(confidenceReason);
+  }
+  if (minConfidence !== null) {
+    where.push("confidence >= ?");
+    params.push(minConfidence);
+  }
+  if (hasCredentials === "true") {
+    where.push("(has_username = 1 OR has_password = 1)");
   }
   if (cursor) {
     where.push("(occurred_at < ? OR (occurred_at = ? AND id < ?))");

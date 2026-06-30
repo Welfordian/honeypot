@@ -6,7 +6,9 @@ const LEGACY_VIEW_MAP: Record<string, string> = {
   network: "/network",
   ips: "/ips",
   payloads: "/payloads",
-  exports: "/exports"
+  exports: "/exports",
+  intel: "/intel",
+  health: "/health"
 };
 
 export function LegacyViewRedirect() {

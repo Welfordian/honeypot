@@ -4,9 +4,11 @@ import { mergeByKey } from "@/lib/utils";
 import type {
   EventFilters,
   EventRow,
+  IntelOverview,
   IpDetail,
   IpProfile,
   NetworkOverview,
+  OpsStatus,
   Overview,
   PayloadDetail,
   PayloadRow,
@@ -28,6 +30,12 @@ function buildEventParams(filters: EventFilters, cursor?: string | null) {
   if (filters.eventKind) params.set("eventKind", filters.eventKind);
   if (filters.destinationPort) params.set("destinationPort", filters.destinationPort);
   if (filters.aggregate) params.set("aggregate", filters.aggregate);
+  if (filters.tag) params.set("tag", filters.tag);
+  if (filters.confidenceReason) params.set("confidenceReason", filters.confidenceReason);
+  if (filters.minConfidence) params.set("minConfidence", filters.minConfidence);
+  if (filters.hasCredentials) params.set("hasCredentials", filters.hasCredentials);
+  if (filters.payloadHash) params.set("payloadHash", filters.payloadHash);
+  if (filters.trap) params.set("trap", filters.trap);
   if (cursor) params.set("cursor", cursor);
   return params.toString();
 }
@@ -77,45 +85,50 @@ export function useIps() {
   });
 }
 
-export function useIpDetail(ip: string) {
-  const results = useQueries({
-    queries: [
-      {
-        queryKey: ["ip-detail", ip],
-        queryFn: () =>
-          api.get<IpDetail>(`/api/v1/ips/${encodeURIComponent(ip)}?limit=100`)
-      },
-      {
-        queryKey: ["ip-timeline", ip],
-        queryFn: () =>
-          api.get<{ timeline: TimelinePoint[] }>(
-            `/api/v1/ips/${encodeURIComponent(ip)}/timeline?sinceHours=168`
-          )
-      }
-    ]
+export function useIpDetailInfinite(ip: string) {
+  const timelineQuery = useQuery({
+    queryKey: ["ip-timeline", ip],
+    queryFn: () =>
+      api.get<{ timeline: TimelinePoint[] }>(
+        `/api/v1/ips/${encodeURIComponent(ip)}/timeline?sinceHours=168`
+      ),
+    enabled: Boolean(ip)
   });
 
-  const [detailQuery, timelineQuery] = results;
+  const detailQuery = useInfiniteQuery({
+    queryKey: ["ip-detail", ip],
+    queryFn: ({ pageParam }) =>
+      api.get<IpDetail>(
+        `/api/v1/ips/${encodeURIComponent(ip)}?limit=100${
+          pageParam ? `&cursor=${encodeURIComponent(pageParam as string)}` : ""
+        }`
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: Boolean(ip)
+  });
+
+  const profile = detailQuery.data?.pages[0]?.profile;
+  const events =
+    detailQuery.data?.pages.reduce(
+      (acc, page) => mergeByKey(acc, page.events, (event) => event.id),
+      [] as EventRow[]
+    ) ?? [];
 
   return {
-    profile: detailQuery.data?.profile,
-    events: detailQuery.data?.events ?? [],
-    nextCursor: detailQuery.data?.next_cursor ?? null,
+    profile,
+    events,
     timeline: timelineQuery.data?.timeline ?? [],
     isLoading: detailQuery.isLoading || timelineQuery.isLoading,
+    isFetchingNextPage: detailQuery.isFetchingNextPage,
+    fetchNextPage: detailQuery.fetchNextPage,
+    hasNextPage: detailQuery.hasNextPage,
     error: detailQuery.error ?? timelineQuery.error
   };
 }
 
-export function useIpDetailMore(ip: string, cursor: string | null) {
-  return useQuery({
-    queryKey: ["ip-detail-more", ip, cursor],
-    queryFn: () =>
-      api.get<IpDetail>(
-        `/api/v1/ips/${encodeURIComponent(ip)}?limit=100&cursor=${encodeURIComponent(cursor!)}`
-      ),
-    enabled: false
-  });
+export function useIpDetail(ip: string) {
+  return useIpDetailInfinite(ip);
 }
 
 export function usePayloads() {
@@ -137,32 +150,69 @@ export function usePayloads() {
   });
 }
 
-export function usePayloadDetail(sha256: string) {
-  const results = useQueries({
-    queries: [
-      {
-        queryKey: ["payload-detail", sha256],
-        queryFn: () =>
-          api.get<PayloadDetail>(`/api/v1/payloads/${encodeURIComponent(sha256)}?limit=100`)
-      },
-      {
-        queryKey: ["payload-timeline", sha256],
-        queryFn: () =>
-          api.get<{ timeline: TimelinePoint[] }>(
-            `/api/v1/payloads/${encodeURIComponent(sha256)}/timeline?sinceHours=168`
-          )
-      }
-    ]
+export function usePayloadDetailInfinite(sha256: string) {
+  const timelineQuery = useQuery({
+    queryKey: ["payload-timeline", sha256],
+    queryFn: () =>
+      api.get<{ timeline: TimelinePoint[] }>(
+        `/api/v1/payloads/${encodeURIComponent(sha256)}/timeline?sinceHours=168`
+      ),
+    enabled: Boolean(sha256)
   });
 
-  const [detailQuery, timelineQuery] = results;
+  const detailQuery = useInfiniteQuery({
+    queryKey: ["payload-detail", sha256],
+    queryFn: ({ pageParam }) =>
+      api.get<PayloadDetail>(
+        `/api/v1/payloads/${encodeURIComponent(sha256)}?limit=100${
+          pageParam ? `&cursor=${encodeURIComponent(pageParam as string)}` : ""
+        }`
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: Boolean(sha256)
+  });
+
+  const data = detailQuery.data?.pages[0] ?? null;
+  const events =
+    detailQuery.data?.pages.reduce(
+      (acc, page) => mergeByKey(acc, page.events, (event) => event.id),
+      [] as EventRow[]
+    ) ?? [];
 
   return {
-    data: detailQuery.data,
+    data: data ? { ...data, events } : null,
     timeline: timelineQuery.data?.timeline ?? [],
     isLoading: detailQuery.isLoading || timelineQuery.isLoading,
+    isFetchingNextPage: detailQuery.isFetchingNextPage,
+    fetchNextPage: detailQuery.fetchNextPage,
+    hasNextPage: detailQuery.hasNextPage,
     error: detailQuery.error ?? timelineQuery.error
   };
+}
+
+export function usePayloadDetail(sha256: string) {
+  return usePayloadDetailInfinite(sha256);
+}
+
+export function useIntelOverview(sinceHours: string) {
+  return useQuery({
+    queryKey: ["intel-overview", sinceHours],
+    queryFn: () =>
+      api.get<IntelOverview>(`/api/v1/intel/overview?sinceHours=${encodeURIComponent(sinceHours)}`),
+    staleTime: 30_000
+  });
+}
+
+export function useOpsStatus(options?: { refetchInterval?: number }) {
+  return useQuery<OpsStatus>({
+    queryKey: ["ops-status"],
+    queryFn: () => api.get<OpsStatus>("/api/v1/ops/status"),
+    staleTime: 30_000,
+    ...(options?.refetchInterval !== undefined
+      ? { refetchInterval: options.refetchInterval }
+      : {})
+  });
 }
 
 export type { EventFilters };

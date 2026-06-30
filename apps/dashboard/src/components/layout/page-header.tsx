@@ -1,4 +1,5 @@
 import { RefreshCcw } from "lucide-react";
+import { OpsStatusStrip } from "@/components/ops/ops-status-strip";
 import { Button } from "@/components/ui/button";
 
 interface PageHeaderProps {
@@ -23,12 +24,15 @@ export function PageHeader({
         <p className="truncate text-sm leading-tight text-muted-foreground">{subtitle}</p>
         {children}
       </div>
-      {onRefresh && (
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing} className="shrink-0">
-          <RefreshCcw className={refreshing ? "animate-spin" : ""} />
-          Refresh
-        </Button>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        <OpsStatusStrip />
+        {onRefresh && (
+          <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
+            <RefreshCcw className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </Button>
+        )}
+      </div>
     </header>
   );
 }

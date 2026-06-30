@@ -144,7 +144,29 @@ export interface EventFilters {
   destinationPort: string;
   aggregate: string;
   sinceHours: string;
+  tag: string;
+  confidenceReason: string;
+  minConfidence: string;
+  hasCredentials: string;
+  payloadHash: string;
+  trap: string;
 }
+
+export const CONFIDENCE_REASONS = [
+  "high_severity",
+  "medium_severity",
+  "credential_attempt",
+  "payload_present",
+  "high_risk_protocol",
+  "sensitive_path",
+  "exploit_path",
+  "scanner_user_agent",
+  "network_attempt",
+  "unknown_port_banner",
+  "repeat_activity",
+  "trap_diversity",
+  "protocol_diversity"
+] as const;
 
 export const DEFAULT_EVENT_FILTERS: EventFilters = {
   ip: "",
@@ -152,5 +174,63 @@ export const DEFAULT_EVENT_FILTERS: EventFilters = {
   eventKind: "",
   destinationPort: "",
   aggregate: "",
-  sinceHours: "24"
+  sinceHours: "24",
+  tag: "",
+  confidenceReason: "",
+  minConfidence: "",
+  hasCredentials: "",
+  payloadHash: "",
+  trap: ""
 };
+
+export type SensorStatus = "ok" | "warning" | "stale";
+
+export interface IntelAttacker {
+  key: string;
+  count: number;
+  max_severity: number;
+  max_confidence: number;
+}
+
+export interface IntelCampaign {
+  sha256: string;
+  event_count: number;
+  unique_ips: number;
+  max_confidence: number;
+}
+
+export interface IntelOverview {
+  topAttackers: IntelAttacker[];
+  topConfidenceReasons: DimensionCount[];
+  topTags: DimensionCount[];
+  credentialAttempts: number;
+  highConfidenceIps: number;
+  campaigns: IntelCampaign[];
+}
+
+export interface OpsSensor {
+  sensor_id: string;
+  last_seen: string;
+  last_protocol: string;
+  last_trap: string;
+  event_count: number;
+  status: SensorStatus;
+}
+
+export interface OpsStatus {
+  sensors: OpsSensor[];
+  ingest: {
+    last_event_at: string | null;
+    last_received_at: string | null;
+  };
+  capture: {
+    chunks_24h: number;
+    packets_24h: number;
+    bytes_24h: number;
+    expiring_soon: number;
+  };
+  totals24h: {
+    events: number;
+    unique_ips: number;
+  };
+}

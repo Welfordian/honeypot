@@ -1,5 +1,4 @@
 import { Activity, Network, ShieldAlert, Signal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { TimelineChart } from "@/components/data/charts/timeline-chart";
 import { EmptyState } from "@/components/data/empty-state";
@@ -8,73 +7,31 @@ import { EventsTable } from "@/components/data/events-table";
 import { InfiniteLoader } from "@/components/data/infinite-loader";
 import { MetricCard } from "@/components/data/metric-card";
 import { ReasonChips } from "@/components/data/reason-chips";
+import { EventDetailSheet } from "@/components/investigation/event-detail-sheet";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/lib/api";
-import { formatTime, mergeByKey } from "@/lib/utils";
-import type { EventRow, IpDetail, IpProfile, TimelinePoint } from "@/types/api";
+import { useEventInspector } from "@/hooks/use-event-inspector";
+import { useIpDetailInfinite } from "@/hooks/use-queries";
+import { buildSearchUrl } from "@/lib/investigation-links";
+import { formatTime } from "@/lib/utils";
 
 export function IpDetailPage() {
   const { ip: rawIp } = useParams<{ ip: string }>();
   const ip = rawIp ? decodeURIComponent(rawIp) : "";
+  const { selectedEvent, openEvent, closeEvent } = useEventInspector();
 
-  const [profile, setProfile] = useState<IpProfile | null>(null);
-  const [events, setEvents] = useState<EventRow[]>([]);
-  const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setProfile(null);
-    setEvents([]);
-    setTimeline([]);
-    setNextCursor(null);
-    setError("");
-    setLoading(true);
-
-    Promise.all([
-      api.get<IpDetail>(`/api/v1/ips/${encodeURIComponent(ip)}?limit=100`),
-      api.get<{ timeline: TimelinePoint[] }>(
-        `/api/v1/ips/${encodeURIComponent(ip)}/timeline?sinceHours=168`
-      )
-    ])
-      .then(([detail, timelineResponse]) => {
-        if (cancelled) return;
-        setProfile(detail.profile);
-        setEvents(detail.events);
-        setNextCursor(detail.next_cursor);
-        setTimeline(timelineResponse.timeline);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load IP detail.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ip]);
-
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const response = await api.get<IpDetail>(
-        `/api/v1/ips/${encodeURIComponent(ip)}?limit=100&cursor=${encodeURIComponent(nextCursor)}`
-      );
-      setEvents((current) => mergeByKey(current, response.events, (event) => event.id));
-      setNextCursor(response.next_cursor);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [ip, loadingMore, nextCursor]);
+  const {
+    profile,
+    events,
+    timeline,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    error
+  } = useIpDetailInfinite(ip);
 
   return (
     <>
@@ -87,8 +44,10 @@ export function IpDetailPage() {
           <span className="font-mono text-sm text-muted-foreground">{ip}</span>
         </div>
 
-        {error && <ErrorBanner message={error} />}
-        {loading ? (
+        {error && (
+          <ErrorBanner message={error instanceof Error ? error.message : "Failed to load IP detail."} />
+        )}
+        {isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-20" />
@@ -130,18 +89,15 @@ export function IpDetailPage() {
                 </div>
                 <div>
                   <h3 className="mb-2 text-sm font-medium">Confidence Reasons</h3>
-                  <ReasonChips reasons={profile.confidence_reasons} />
+                  <ReasonChips reasons={profile.confidence_reasons} linkable />
                 </div>
                 <div>
                   <h3 className="mb-2 text-sm font-medium">Traps and Protocols</h3>
                   <div className="flex flex-wrap gap-2">
                     {profile.unique_traps.map((trap) => (
-                      <span
-                        key={trap}
-                        className="rounded-md border border-border px-2 py-1 text-xs"
-                      >
-                        {trap}
-                      </span>
+                      <Button key={trap} variant="outline" size="sm" asChild>
+                        <Link to={buildSearchUrl({ ip, trap })}>{trap}</Link>
+                      </Button>
                     ))}
                     {profile.protocols.map((protocol) => (
                       <span
@@ -156,13 +112,34 @@ export function IpDetailPage() {
               </CardContent>
             </Card>
 
+            <Card>
+              <CardHeader>
+                <CardTitle>Related searches</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={buildSearchUrl({ ip, hasCredentials: "true" })}>
+                    Credential attempts from this IP
+                  </Link>
+                </Button>
+                {profile.last_trap && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={buildSearchUrl({ ip, trap: profile.last_trap })}>
+                      Same trap from this IP
+                    </Link>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
             <TimelineChart title="IP Timeline" data={timeline} />
-            <EventsTable events={events} />
+            <EventsTable events={events} onSelectEvent={openEvent} />
             <InfiniteLoader
-              hasMore={Boolean(nextCursor)}
-              loading={loadingMore}
-              onLoadMore={() => void loadMore()}
+              hasMore={Boolean(hasNextPage)}
+              loading={isFetchingNextPage}
+              onLoadMore={() => void fetchNextPage()}
             />
+            <EventDetailSheet event={selectedEvent} onClose={closeEvent} />
           </>
         )}
       </div>

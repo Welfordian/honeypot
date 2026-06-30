@@ -77,5 +77,5 @@ export function token(value: string | null, max = 120): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > max) return null;
-  return /^[A-Za-z0-9_.:/@+-]+$/.test(trimmed) ? trimmed : null;
+  return /^[A-Za-z0-9_.-]+$/.test(trimmed) ? trimmed : null;
 }
