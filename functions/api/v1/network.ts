@@ -1,97 +1,60 @@
 import type { PagesCtx } from "../../_lib/env";
 import { cachedJson, parseSinceHours, urlOf } from "../../_lib/http";
+import {
+  FAST_CACHE,
+  sumRollupAmountForKey,
+  sumRollupCounts,
+  sumRollupCountsForKeys,
+  sumRollupCountForKey,
+  sumRollupEventTotalsForKinds,
+  sumRollupTimelineWithUniqueIpsForKinds
+} from "../../_lib/rollups";
 
-interface CountRow {
-  key: string | number;
-  count: number;
-}
+const NETWORK_KINDS = ["network-attempt", "tcp-banner"];
 
 export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const url = urlOf(ctx.request);
   const sinceHours = parseSinceHours(url, 24, 24 * 30);
   const since = `-${sinceHours} hours`;
 
-  const [totals, timeline, topPorts, topProtocols, tcpFlags, eventKinds, topBannerIps, pcap] = await Promise.all([
-    ctx.env.DB.prepare(
-      `SELECT
-         COUNT(*) AS events,
-         COUNT(DISTINCT source_ip) AS unique_ips,
-         COALESCE(SUM(packet_count), 0) AS packets,
-         COALESCE(SUM(byte_count), 0) AS bytes,
-         COALESCE(SUM(CASE WHEN is_aggregate = 1 THEN 1 ELSE 0 END), 0) AS aggregate_events
-       FROM events
-       WHERE event_kind IN ('network-attempt', 'tcp-banner')
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-    ).bind(since).first(),
-    ctx.env.DB.prepare(
-      `SELECT substr(occurred_at, 1, 13) || ':00:00.000Z' AS bucket, COUNT(*) AS count, COUNT(DISTINCT source_ip) AS unique_ips
-       FROM events
-       WHERE event_kind IN ('network-attempt', 'tcp-banner')
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
-       GROUP BY bucket
-       ORDER BY bucket ASC`
-    ).bind(since).all(),
-    ctx.env.DB.prepare(
-      `SELECT destination_port AS key, COUNT(*) AS count
-       FROM events
-       WHERE event_kind IN ('network-attempt', 'tcp-banner')
-         AND destination_port IS NOT NULL
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
-       GROUP BY destination_port
-       ORDER BY count DESC
-       LIMIT 20`
-    ).bind(since).all<CountRow>(),
-    ctx.env.DB.prepare(
-      `SELECT protocol AS key, COUNT(*) AS count
-       FROM events
-       WHERE event_kind IN ('network-attempt', 'tcp-banner')
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
-       GROUP BY protocol
-       ORDER BY count DESC
-       LIMIT 20`
-    ).bind(since).all<CountRow>(),
-    ctx.env.DB.prepare(
-      `SELECT tcp_flags AS key, COUNT(*) AS count
-       FROM events
-       WHERE event_kind IN ('network-attempt', 'tcp-banner')
-         AND tcp_flags IS NOT NULL
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
-       GROUP BY tcp_flags
-       ORDER BY count DESC
-       LIMIT 20`
-    ).bind(since).all<CountRow>(),
-    ctx.env.DB.prepare(
-      `SELECT event_kind AS key, COUNT(*) AS count
-       FROM events
-       WHERE event_kind IN ('network-attempt', 'tcp-banner')
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
-       GROUP BY event_kind
-       ORDER BY count DESC`
-    ).bind(since).all<CountRow>(),
-    ctx.env.DB.prepare(
-      `SELECT source_ip AS key, COUNT(*) AS count
-       FROM events
-       WHERE event_kind = 'tcp-banner'
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
-       GROUP BY source_ip
-       ORDER BY count DESC
-       LIMIT 20`
-    ).bind(since).all<CountRow>(),
-    ctx.env.DB.prepare(
-      `SELECT COUNT(*) AS chunks, COALESCE(SUM(size_bytes), 0) AS bytes, COALESCE(SUM(packet_count), 0) AS packets
-       FROM pcap_chunks
-       WHERE uploaded_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-    ).bind(since).first()
-  ]);
+  const [rollupTotals, timeline, topPorts, topProtocols, tcpFlags, eventKinds, topBannerIps, pcap, packets, bytes, aggregateEvents] =
+    await Promise.all([
+      sumRollupEventTotalsForKinds(ctx.env.DB, since, NETWORK_KINDS),
+      sumRollupTimelineWithUniqueIpsForKinds(ctx.env.DB, since, NETWORK_KINDS),
+      sumRollupCounts(ctx.env.DB, "net_destination_port", since, 20),
+      sumRollupCounts(ctx.env.DB, "net_protocol", since, 20),
+      sumRollupCounts(ctx.env.DB, "net_tcp_flags", since, 20),
+      sumRollupCountsForKeys(ctx.env.DB, "event_kind", NETWORK_KINDS, since),
+      sumRollupCounts(ctx.env.DB, "net_banner_ip", since, 20),
+      ctx.env.DB.prepare(
+        `SELECT COUNT(*) AS chunks, COALESCE(SUM(size_bytes), 0) AS bytes, COALESCE(SUM(packet_count), 0) AS packets
+         FROM pcap_chunks
+         WHERE uploaded_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
+      )
+        .bind(since)
+        .first<{ chunks: number; bytes: number; packets: number }>(),
+      sumRollupAmountForKey(ctx.env.DB, "net_packets", "total", since),
+      sumRollupAmountForKey(ctx.env.DB, "net_bytes", "total", since),
+      sumRollupCountForKey(ctx.env.DB, "net_aggregate", "1", since)
+    ]);
 
-  return cachedJson({
-    totals: totals ?? { events: 0, unique_ips: 0, packets: 0, bytes: 0, aggregate_events: 0 },
-    timeline: timeline.results,
-    topPorts: topPorts.results.map((row) => ({ ...row, key: String(row.key) })),
-    topProtocols: topProtocols.results,
-    tcpFlags: tcpFlags.results,
-    eventKinds: eventKinds.results,
-    topBannerIps: topBannerIps.results,
-    pcap: pcap ?? { chunks: 0, bytes: 0, packets: 0 }
-  });
+  return cachedJson(
+    {
+      totals: {
+        events: rollupTotals.events,
+        unique_ips: rollupTotals.unique_ips,
+        packets,
+        bytes,
+        aggregate_events: aggregateEvents
+      },
+      timeline,
+      topPorts: topPorts.map((row) => ({ ...row, key: String(row.key) })),
+      topProtocols,
+      tcpFlags,
+      eventKinds,
+      topBannerIps: topBannerIps,
+      pcap: pcap ?? { chunks: 0, bytes: 0, packets: 0 }
+    },
+    FAST_CACHE
+  );
 };

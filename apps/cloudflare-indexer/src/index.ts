@@ -8,6 +8,7 @@ import { handleIngest, handlePcapIngest } from "./ingest.js";
 import { publishLiveEvent } from "./live.js";
 import { recomputeConfidence } from "./recompute.js";
 import { syncIpinfoMmdb } from "./syncIpinfoMmdb.js";
+import { warmOverviewCache } from "./warmOverviewCache.js";
 
 function json(body: unknown, init?: ResponseInit): Response {
   const headers = new Headers(init?.headers);
@@ -202,6 +203,10 @@ export default {
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(expirePcapChunks(env));
+    // Minute cron keeps overview API responses hot at the CDN (120s cache TTL).
+    if (event.cron === "* * * * *") {
+      ctx.waitUntil(warmOverviewCache(env).catch((error) => console.error("overview cache warm failed", error)));
+    }
     if (event.cron === "0 5 * * *" && env.IPINFO_TOKEN) {
       ctx.waitUntil(syncIpinfoMmdb(env).catch((error) => console.error("IPinfo MMDB sync failed", error)));
     }

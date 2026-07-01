@@ -77,21 +77,34 @@ export interface IpIoc {
   as_name?: string | null;
 }
 
-export interface Overview {
-  totals: { events: number; unique_ips: number; max_severity: number };
+export interface OverviewSensor {
+  sensor_id: string;
+  last_seen: string;
+  last_protocol: string;
+  last_trap: string;
+  event_count: number;
+}
+
+export interface OverviewTotals {
+  events: number;
+  unique_ips: number;
+  max_severity: number;
+}
+
+export interface OverviewSummary {
+  totals: OverviewTotals;
+  sensors: OverviewSensor[];
+}
+
+export interface OverviewCharts {
   timeline: Array<{ bucket: string; count: number }>;
   topIps: Array<{ key: string; count: number; max_severity: number }>;
   topProtocols: Array<{ key: string; count: number }>;
   topTraps: Array<{ key: string; count: number }>;
   topSeverities: Array<{ key: string | number; count: number }>;
-  sensors: Array<{
-    sensor_id: string;
-    last_seen: string;
-    last_protocol: string;
-    last_trap: string;
-    event_count: number;
-  }>;
 }
+
+export interface Overview extends OverviewSummary, OverviewCharts {}
 
 export interface PayloadRow {
   sha256: string;

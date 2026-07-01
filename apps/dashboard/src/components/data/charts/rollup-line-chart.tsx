@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { formatChartValue, formatCount } from "@/lib/format";
 import { formatTime } from "@/lib/utils";
 import type { RollupSeries } from "@/types/api";
 
@@ -66,7 +67,12 @@ export function RollupLineChart({ title, series, maxSeries = 6, height = 260 }: 
             <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,46,40,0.8)" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#6b7f76" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#6b7f76" allowDecimals={false} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                stroke="#6b7f76"
+                allowDecimals={false}
+                tickFormatter={formatCount}
+              />
               <Tooltip
                 contentStyle={{
                   background: "#0f1513",
@@ -77,6 +83,7 @@ export function RollupLineChart({ title, series, maxSeries = 6, height = 260 }: 
                 }}
                 labelStyle={{ color: "#e8f0ec" }}
                 itemStyle={{ color: "#e8f0ec" }}
+                formatter={(value) => formatChartValue(value as number | string)}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {ranked.map((item, index) => (

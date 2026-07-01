@@ -26,6 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEventInspector } from "@/hooks/use-event-inspector";
 import { usePayloadDetailInfinite } from "@/hooks/use-queries";
+import { formatCount } from "@/lib/format";
 import { api } from "@/lib/api";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { fetchResearcherJson, getResearcherToken } from "@/lib/researcher-token";
@@ -226,7 +227,7 @@ export function PayloadDetailPage() {
                               {ip.source_ip}
                             </Link>
                           </TableCell>
-                          <TableCell>{ip.event_count}</TableCell>
+                          <TableCell>{formatCount(ip.event_count)}</TableCell>
                           <TableCell>
                             <SeverityBadge value={ip.max_confidence} type="confidence" />
                           </TableCell>

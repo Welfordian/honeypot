@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCount } from "@/lib/format";
 import { useNetwork } from "@/hooks/use-queries";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
@@ -78,19 +79,19 @@ export function NetworkPage() {
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Chunks</p>
-                    <p className="text-lg font-semibold">{data.pcap.chunks}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.pcap.chunks)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Packets</p>
-                    <p className="text-lg font-semibold">{data.pcap.packets}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.pcap.packets)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Bytes</p>
-                    <p className="text-lg font-semibold">{data.pcap.bytes}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.pcap.bytes)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Aggregates</p>
-                    <p className="text-lg font-semibold">{data.totals.aggregate_events}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.totals.aggregate_events)}</p>
                   </div>
                 </div>
               </div>

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActors } from "@/hooks/use-queries";
+import { formatCount } from "@/lib/format";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { formatTime, shortHash } from "@/lib/utils";
 
@@ -67,7 +68,7 @@ export function ActorsPage() {
                     <SeverityBadge value={actor.confidence} type="confidence" />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {actor.event_count} events · {formatTime(actor.first_seen)} – {formatTime(actor.last_seen)}
+                    {formatCount(actor.event_count)} events · {formatTime(actor.first_seen)} – {formatTime(actor.last_seen)}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-3">

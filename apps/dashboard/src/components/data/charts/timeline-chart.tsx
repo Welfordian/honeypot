@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { formatChartValue, formatCount } from "@/lib/format";
 import { formatTime } from "@/lib/utils";
 
 interface TimelineChartProps {
@@ -40,7 +41,12 @@ export function TimelineChart({ title, data, height = 240 }: TimelineChartProps)
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,46,40,0.8)" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#6b7f76" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#6b7f76" allowDecimals={false} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                stroke="#6b7f76"
+                allowDecimals={false}
+                tickFormatter={formatCount}
+              />
               <Tooltip
                 cursor={{ fill: "rgba(30, 46, 40, 0.25)" }}
                 contentStyle={{
@@ -52,6 +58,7 @@ export function TimelineChart({ title, data, height = 240 }: TimelineChartProps)
                 }}
                 labelStyle={{ color: "#e8f0ec" }}
                 itemStyle={{ color: "#e8f0ec" }}
+                formatter={(value) => formatChartValue(value as number | string)}
               />
               <Area type="monotone" dataKey="count" stroke="#00e676" fill="url(#timelineFill)" />
             </AreaChart>

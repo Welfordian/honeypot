@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { SensorStatusBadge } from "@/components/ops/sensor-status-badge";
 import { useOpsStatus } from "@/hooks/use-queries";
+import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SensorStatus } from "@/types/api";
 
@@ -17,7 +19,18 @@ const DOT_CLASS: Record<SensorStatus, string> = {
 };
 
 export function OpsStatusStrip() {
-  const { data } = useOpsStatus({ refetchInterval: 60_000 });
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(() => setReady(true));
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(() => setReady(true), 250);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const { data } = useOpsStatus({ refetchInterval: 60_000, enabled: ready });
   const sensors = data?.sensors ?? [];
   const status = worstStatus(sensors.map((sensor) => sensor.status));
 
@@ -33,7 +46,7 @@ export function OpsStatusStrip() {
       <span className={cn("h-2 w-2 rounded-full", DOT_CLASS[status])} aria-hidden />
       <span>Live</span>
       <span aria-hidden>·</span>
-      <span>{sensors.length} sensors</span>
+      <span>{formatCount(sensors.length)} sensors</span>
       {status !== "ok" && (
         <>
           <span aria-hidden>·</span>

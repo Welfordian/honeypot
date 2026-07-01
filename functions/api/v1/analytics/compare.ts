@@ -1,7 +1,14 @@
 import type { PagesCtx } from "../../../_lib/env";
 import { badRequest, cachedJson, token, urlOf } from "../../../_lib/http";
+import { FAST_CACHE, sumRollupCountForKey } from "../../../_lib/rollups";
 
 const DIMENSIONS = new Set(["tag", "confidenceReason", "trap"]);
+
+const ROLLUP_DIMENSION: Record<string, string> = {
+  tag: "tag",
+  confidenceReason: "confidence_reason",
+  trap: "trap"
+};
 
 function parseHours(url: URL, name: string, fallback: number): number | Response {
   const raw = Number(url.searchParams.get(name) ?? fallback);
@@ -16,30 +23,7 @@ async function countForWindow(
   hours: number
 ): Promise<number> {
   const since = `-${hours} hours`;
-  if (dimension === "trap") {
-    const row = await db
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM events
-         WHERE trap = ?
-           AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-      )
-      .bind(key, since)
-      .first<{ count: number }>();
-    return row?.count ?? 0;
-  }
-
-  const column = dimension === "tag" ? "tags_json" : "confidence_reasons_json";
-  const row = await db
-    .prepare(
-      `SELECT COUNT(*) AS count
-       FROM events, json_each(${column})
-       WHERE value = ?
-         AND occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-    )
-    .bind(key, since)
-    .first<{ count: number }>();
-  return row?.count ?? 0;
+  return sumRollupCountForKey(db, ROLLUP_DIMENSION[dimension] ?? dimension, key, since);
 }
 
 export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
@@ -65,10 +49,13 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
     countForWindow(ctx.env.DB, dimension, key, hoursB)
   ]);
 
-  return cachedJson({
-    dimension,
-    key,
-    windowA: { hours: hoursA, count: countA },
-    windowB: { hours: hoursB, count: countB }
-  });
+  return cachedJson(
+    {
+      dimension,
+      key,
+      windowA: { hours: hoursA, count: countA },
+      windowB: { hours: hoursB, count: countB }
+    },
+    FAST_CACHE
+  );
 };
