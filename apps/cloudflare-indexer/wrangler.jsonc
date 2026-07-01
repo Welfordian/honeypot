@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "honeypot-analytics",
-      "database_id": "replace-with-d1-database-id",
+      "database_id": "836798a0-8943-4587-8ec3-38fd2f59df8c",
       "migrations_dir": "../../migrations"
     }
   ],
