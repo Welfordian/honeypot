@@ -24,6 +24,7 @@ import { RollupLineChart } from "@/components/data/charts/rollup-line-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIntelOverview, useHttpIntel, useAttackTechniques, useRollups } from "@/hooks/use-queries";
 import { api } from "@/lib/api";
+import { formatCount } from "@/lib/format";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { shortHash } from "@/lib/utils";
 import type { IpDetail } from "@/types/api";
@@ -206,8 +207,8 @@ export function IntelPage() {
                                       {row.key}
                                     </Link>
                                   </TableCell>
-                                  <TableCell>{row.count}</TableCell>
-                                  <TableCell>{row.unique_ips}</TableCell>
+                                  <TableCell>{formatCount(row.count)}</TableCell>
+                                  <TableCell>{formatCount(row.unique_ips)}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -229,7 +230,7 @@ export function IntelPage() {
                             <div className="flex flex-wrap gap-2 text-xs">
                               {trend.timeline.map((point) => (
                                 <span key={`${trend.key}-${point.bucket}`} className="rounded border px-2 py-1">
-                                  {point.bucket.slice(11, 16)}Z · {point.count}
+                                  {point.bucket.slice(11, 16)}Z · {formatCount(point.count)}
                                 </span>
                               ))}
                             </div>
@@ -258,8 +259,8 @@ export function IntelPage() {
                               {httpIntel.credentialPaths.map((row) => (
                                 <TableRow key={row.key}>
                                   <TableCell className="font-mono text-xs">{row.key}</TableCell>
-                                  <TableCell>{row.count}</TableCell>
-                                  <TableCell>{row.unique_ips}</TableCell>
+                                  <TableCell>{formatCount(row.count)}</TableCell>
+                                  <TableCell>{formatCount(row.unique_ips)}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -318,7 +319,7 @@ export function IntelPage() {
                               <TableCell>
                                 <Badge variant="outline">{technique.tactic}</Badge>
                               </TableCell>
-                              <TableCell>{technique.count}</TableCell>
+                              <TableCell>{formatCount(technique.count)}</TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
                                   {technique.example_ips.map((ip) => (
@@ -375,7 +376,7 @@ export function IntelPage() {
                             {attacker.asn != null ? `AS${attacker.asn}` : "—"}
                             {attacker.as_name ? ` · ${attacker.as_name}` : ""}
                           </TableCell>
-                          <TableCell>{attacker.count}</TableCell>
+                          <TableCell>{formatCount(attacker.count)}</TableCell>
                           <TableCell>
                             <SeverityBadge value={attacker.max_severity} type="severity" />
                           </TableCell>
@@ -401,7 +402,7 @@ export function IntelPage() {
                     {data.topTags.map((tag) => (
                       <Link key={tag.key} to={buildSearchUrl({ tag: tag.key, sinceHours: appliedHours })}>
                         <Badge variant="outline" className="hover:bg-primary/10">
-                          {tag.key} ({tag.count})
+                          {tag.key} ({formatCount(tag.count)})
                         </Badge>
                       </Link>
                     ))}
@@ -422,11 +423,11 @@ export function IntelPage() {
                       <div className="grid grid-cols-3 gap-2 text-sm">
                         <div>
                           <p className="text-xs text-muted-foreground">Events</p>
-                          <p className="font-medium">{campaign.event_count}</p>
+                          <p className="font-medium">{formatCount(campaign.event_count)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Unique IPs</p>
-                          <p className="font-medium">{campaign.unique_ips}</p>
+                          <p className="font-medium">{formatCount(campaign.unique_ips)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Max conf.</p>

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOpsStatus } from "@/hooks/use-queries";
+import { formatCount } from "@/lib/format";
 import { formatTime } from "@/lib/utils";
 import type { SensorStatus } from "@/types/api";
 
@@ -96,7 +97,7 @@ export function HealthPage() {
                           <TableCell>
                             {sensor.last_protocol}/{sensor.last_trap}
                           </TableCell>
-                          <TableCell>{sensor.event_count}</TableCell>
+                          <TableCell>{formatCount(sensor.event_count)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -113,19 +114,19 @@ export function HealthPage() {
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Chunks (24h)</p>
-                    <p className="text-lg font-semibold">{data.capture.chunks_24h}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.capture.chunks_24h)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Packets (24h)</p>
-                    <p className="text-lg font-semibold">{data.capture.packets_24h}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.capture.packets_24h)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Bytes (24h)</p>
-                    <p className="text-lg font-semibold">{data.capture.bytes_24h}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.capture.bytes_24h)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Expiring within 48h</p>
-                    <p className="text-lg font-semibold">{data.capture.expiring_soon}</p>
+                    <p className="text-lg font-semibold">{formatCount(data.capture.expiring_soon)}</p>
                   </div>
                 </div>
                 <p className="mt-4 text-xs text-muted-foreground">

@@ -1,11 +1,10 @@
 import type { PagesCtx } from "../../../_lib/env";
 import { relatedIpsAmongActors } from "../../../_lib/actorRelated";
 import { cachedJson, parseLimit, parseSinceHours, urlOf } from "../../../_lib/http";
-import { parseJsonList } from "../../../_lib/rows";
+import { FAST_CACHE, topAttackersInWindow } from "../../../_lib/rollups";
 
 const SINCE_CLAUSE = `occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`;
 const UA_PREFIX_LEN = 32;
-const ACTORS_CACHE = { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } };
 
 interface ActorBase {
   source_ip: string;
@@ -58,27 +57,23 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const limit = parseLimit(url, 20, 50);
   const since = `-${sinceHours} hours`;
 
-  const topActors = await ctx.env.DB.prepare(
-    `SELECT source_ip, COUNT(*) AS event_count, MAX(confidence) AS confidence,
-            MIN(occurred_at) AS first_seen, MAX(occurred_at) AS last_seen
-     FROM events
-     WHERE ${SINCE_CLAUSE}
-     GROUP BY source_ip
-     ORDER BY event_count DESC, confidence DESC, last_seen DESC
-     LIMIT ?`
-  )
-    .bind(since, limit)
-    .all<ActorBase>();
+  const topProfiles = await topAttackersInWindow(ctx.env.DB, since, limit);
+  const bases: ActorBase[] = topProfiles.map((row) => ({
+    source_ip: row.key,
+    event_count: row.count,
+    confidence: row.max_confidence,
+    first_seen: row.first_seen,
+    last_seen: row.last_seen
+  }));
 
-  const bases = topActors.results;
   if (bases.length === 0) {
-    return cachedJson({ actors: [] }, ACTORS_CACHE);
+    return cachedJson({ actors: [] }, FAST_CACHE);
   }
 
   const ips = bases.map((row) => row.source_ip);
   const placeholders = ips.map(() => "?").join(",");
 
-  const [trapSeq, protocols, tags, payloads, uaPrefixes, profileRows] = await Promise.all([
+  const [trapSeq, protocols, tags, payloads, uaPrefixes] = await Promise.all([
     ctx.env.DB.prepare(
       `SELECT source_ip, trap
        FROM events
@@ -125,26 +120,13 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
        ORDER BY source_ip, cnt DESC`
     )
       .bind(since, ...ips)
-      .all<UaRow>(),
-    ctx.env.DB.prepare(
-      `SELECT source_ip, unique_traps_json, protocols_json, confidence_reasons_json
-       FROM ip_profiles
-       WHERE source_ip IN (${placeholders})`
-    )
-      .bind(...ips)
-      .all<{
-        source_ip: string;
-        unique_traps_json: string;
-        protocols_json: string;
-        confidence_reasons_json: string;
-      }>()
+      .all<UaRow>()
   ]);
 
   const trapSeqByIp = groupBy(trapSeq.results, (row) => row.source_ip);
   const protocolsByIp = groupBy(protocols.results, (row) => row.source_ip);
   const tagsByIp = groupBy(tags.results, (row) => row.source_ip);
   const payloadsByIp = groupBy(payloads.results, (row) => row.source_ip);
-  const profileByIp = new Map(profileRows.results.map((row) => [row.source_ip, row]));
 
   const uaByIp = new Map<string, string>();
   for (const row of uaPrefixes.results) {
@@ -162,11 +144,8 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   );
 
   const actors = bases.map((base) => {
-    const profile = profileByIp.get(base.source_ip);
-    let trapSequence = (trapSeqByIp.get(base.source_ip) ?? []).map((row) => row.trap);
-    if (!trapSequence.length) trapSequence = parseJsonList(profile?.unique_traps_json ?? "[]");
-    let protocolList = (protocolsByIp.get(base.source_ip) ?? []).map((row) => row.protocol);
-    if (!protocolList.length) protocolList = parseJsonList(profile?.protocols_json ?? "[]");
+    const trapSequence = (trapSeqByIp.get(base.source_ip) ?? []).map((row) => row.trap);
+    const protocolList = (protocolsByIp.get(base.source_ip) ?? []).map((row) => row.protocol);
     const tagList = (tagsByIp.get(base.source_ip) ?? []).map((row) => row.tag);
     const relatedPayloads = (payloadsByIp.get(base.source_ip) ?? [])
       .slice(0, 5)
@@ -188,5 +167,5 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
     };
   });
 
-  return cachedJson({ actors }, ACTORS_CACHE);
+  return cachedJson({ actors }, FAST_CACHE);
 };

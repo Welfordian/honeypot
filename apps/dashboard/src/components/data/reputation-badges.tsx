@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { formatCount } from "@/lib/format";
 import type { GreynoiseReputation } from "@/types/api";
 
 function greynoiseVariant(classification: string | null | undefined): "critical" | "secondary" | "outline" | "low" {
@@ -60,11 +61,11 @@ export function VirusTotalRatio({ stats }: VirusTotalRatioProps) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={variant}>
-          VirusTotal: {flagged}/{total} flagged
+          VirusTotal: {formatCount(flagged)}/{formatCount(total)} flagged
         </Badge>
         <span className="text-xs text-muted-foreground">
-          {stats.malicious} malicious · {stats.suspicious} suspicious · {stats.harmless} harmless ·{" "}
-          {stats.undetected} undetected
+          {formatCount(stats.malicious)} malicious · {formatCount(stats.suspicious)} suspicious ·{" "}
+          {formatCount(stats.harmless)} harmless · {formatCount(stats.undetected)} undetected
         </span>
       </div>
     </div>

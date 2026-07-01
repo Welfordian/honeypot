@@ -3,7 +3,9 @@
   "name": "honeypot-sec",
   "pages_build_output_dir": "apps/dashboard/dist",
   "compatibility_date": "2026-06-29",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "vars": {
     "PUBLIC_SITE_ORIGIN": "https://pot.welford.me",
     "SUPPRESSED_SOURCE_IPS": "203.0.113.10"
@@ -11,15 +13,17 @@
   "r2_buckets": [
     {
       "binding": "EVENTS_BUCKET",
-      "bucket_name": "honeypot-events"
+      "bucket_name": "honeypot-events",
+      "remote": true
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "honeypot-analytics",
-      "database_id": "replace-with-d1-database-id",
-      "migrations_dir": "migrations"
+      "database_id": "836798a0-8943-4587-8ec3-38fd2f59df8c",
+      "migrations_dir": "migrations",
+      "remote": true
     }
   ],
   "env": {
@@ -31,15 +35,17 @@
       "r2_buckets": [
         {
           "binding": "EVENTS_BUCKET",
-          "bucket_name": "honeypot-events"
+          "bucket_name": "honeypot-events",
+          "remote": true
         }
       ],
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "honeypot-analytics",
-          "database_id": "replace-with-d1-database-id",
-          "migrations_dir": "migrations"
+          "database_id": "836798a0-8943-4587-8ec3-38fd2f59df8c",
+          "migrations_dir": "migrations",
+          "remote": true
         }
       ]
     }

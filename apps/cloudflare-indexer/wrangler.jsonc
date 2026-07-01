@@ -9,6 +9,7 @@
     "head_sampling_rate": 0.1
   },
   "vars": {
+    "PUBLIC_SITE_ORIGIN": "https://pot.welford.me",
     "SUPPRESSED_SOURCE_IPS": "203.0.113.10",
     "PCAP_PREFIX": "private-pcap",
     "PCAP_RETENTION_DAYS": "14",
@@ -24,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "honeypot-analytics",
-      "database_id": "replace-with-d1-database-id",
+      "database_id": "836798a0-8943-4587-8ec3-38fd2f59df8c",
       "migrations_dir": "../../migrations"
     }
   ],
@@ -44,6 +45,6 @@
     ]
   },
   "triggers": {
-    "crons": ["0 */6 * * *", "0 5 * * *"]
+    "crons": ["* * * * *", "0 */6 * * *", "0 5 * * *"]
   }
 }

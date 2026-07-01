@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { formatCount } from "@/lib/format";
 import { usePayloads } from "@/hooks/use-queries";
 import { shortHash } from "@/lib/utils";
 
@@ -47,12 +48,12 @@ export function PayloadsPage() {
                           {shortHash(payload.sha256)}
                         </Link>
                       </TableCell>
-                      <TableCell>{payload.event_count}</TableCell>
-                      <TableCell>{payload.unique_ips}</TableCell>
+                      <TableCell>{formatCount(payload.event_count)}</TableCell>
+                      <TableCell>{formatCount(payload.unique_ips)}</TableCell>
                       <TableCell>
                         <SeverityBadge value={payload.max_confidence} type="confidence" />
                       </TableCell>
-                      <TableCell>{payload.size_bytes}</TableCell>
+                      <TableCell>{formatCount(payload.size_bytes)}</TableCell>
                       <TableCell>{payload.mime_guess}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{payload.preview}</TableCell>
                     </TableRow>

@@ -1,18 +1,9 @@
 import type { PagesCtx } from "../../../_lib/env";
 import { cachedJson, parseSinceHours, urlOf } from "../../../_lib/http";
-
-const SINCE_CLAUSE = `occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`;
-
-interface PayloadCampaignRow {
-  sha256: string;
-  event_count: number;
-  unique_ips: number;
-  max_confidence: number;
-}
+import { FAST_CACHE, topPayloadCampaigns } from "../../../_lib/rollups";
 
 interface BehavioralCampaignRow {
   fingerprint: string;
-  traps: string;
   unique_ips: number;
   event_count: number;
   max_confidence: number;
@@ -32,58 +23,40 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
   const since = `-${sinceHours} hours`;
 
   const [payloadCampaigns, behavioralCampaigns] = await Promise.all([
+    topPayloadCampaigns(ctx.env.DB, since, 20),
     ctx.env.DB.prepare(
-      `SELECT payload_sha256 AS sha256, COUNT(*) AS event_count,
-              COUNT(DISTINCT source_ip) AS unique_ips, MAX(confidence) AS max_confidence
-       FROM events
-       WHERE payload_sha256 IS NOT NULL
-         AND ${SINCE_CLAUSE}
-       GROUP BY payload_sha256
-       HAVING event_count >= 2
-       ORDER BY event_count DESC
-       LIMIT 20`
-    ).bind(since).all<PayloadCampaignRow>(),
-    ctx.env.DB.prepare(
-      `WITH window_events AS (
-         SELECT source_ip, trap, confidence
-         FROM events
-         WHERE ${SINCE_CLAUSE}
-       ),
-       ip_traps AS (
-         SELECT source_ip, trap
-         FROM window_events
-         GROUP BY source_ip, trap
-       ),
-       ip_fingerprints AS (
+      `WITH per_ip AS (
          SELECT source_ip,
-           (SELECT GROUP_CONCAT(trap, '|')
-            FROM (SELECT trap FROM ip_traps it WHERE it.source_ip = ot.source_ip ORDER BY trap ASC)
-           ) AS fingerprint
-         FROM (SELECT DISTINCT source_ip FROM ip_traps) ot
-       ),
-       campaign_groups AS (
-         SELECT fingerprint,
-                COUNT(DISTINCT source_ip) AS unique_ips,
-                GROUP_CONCAT(DISTINCT source_ip) AS source_ips
-         FROM ip_fingerprints
-         WHERE fingerprint IS NOT NULL AND fingerprint != ''
-         GROUP BY fingerprint
-         HAVING unique_ips >= 2
+                (
+                  SELECT GROUP_CONCAT(trap, '|')
+                  FROM (
+                    SELECT DISTINCT trap
+                    FROM events e2
+                    WHERE e2.source_ip = e.source_ip
+                      AND e2.occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
+                    ORDER BY trap
+                  )
+                ) AS fingerprint,
+                COUNT(*) AS event_count,
+                MAX(confidence) AS max_confidence
+         FROM events e
+         WHERE e.occurred_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
+         GROUP BY source_ip
        )
-       SELECT g.fingerprint,
-              g.fingerprint AS traps,
-              g.unique_ips,
-              g.source_ips,
-              (SELECT COUNT(*) FROM window_events w
-               JOIN ip_fingerprints f ON f.source_ip = w.source_ip
-               WHERE f.fingerprint = g.fingerprint) AS event_count,
-              (SELECT MAX(confidence) FROM window_events w
-               JOIN ip_fingerprints f ON f.source_ip = w.source_ip
-               WHERE f.fingerprint = g.fingerprint) AS max_confidence
-       FROM campaign_groups g
+       SELECT fingerprint,
+              COUNT(*) AS unique_ips,
+              SUM(event_count) AS event_count,
+              MAX(max_confidence) AS max_confidence,
+              GROUP_CONCAT(source_ip) AS source_ips
+       FROM per_ip
+       WHERE fingerprint IS NOT NULL AND fingerprint != ''
+       GROUP BY fingerprint
+       HAVING unique_ips >= 2
        ORDER BY unique_ips DESC, event_count DESC
        LIMIT 20`
-    ).bind(since).all<BehavioralCampaignRow>()
+    )
+      .bind(since, since)
+      .all<BehavioralCampaignRow>()
   ]);
 
   const behavioral = await Promise.all(
@@ -97,8 +70,11 @@ export const onRequestGet: PagesFunction<PagesCtx["env"]> = async (ctx) => {
     }))
   );
 
-  return cachedJson({
-    payload_campaigns: payloadCampaigns.results,
-    behavioral_campaigns: behavioral
-  });
+  return cachedJson(
+    {
+      payload_campaigns: payloadCampaigns,
+      behavioral_campaigns: behavioral
+    },
+    FAST_CACHE
+  );
 };

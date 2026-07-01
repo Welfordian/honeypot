@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle
 } from "@/components/ui/sheet";
+import { formatCount } from "@/lib/format";
 import { buildSearchUrl } from "@/lib/investigation-links";
 import { downloadResearcherResource, getResearcherToken } from "@/lib/researcher-token";
 import { formatTime, shortHash } from "@/lib/utils";
@@ -121,8 +122,8 @@ export function EventDetailSheet({ event, onClose }: EventDetailSheetProps) {
             <div className="grid grid-cols-2 gap-4">
               <DetailField label="Source port">{event.source_port ?? "—"}</DetailField>
               <DetailField label="Destination port">{event.destination_port ?? "—"}</DetailField>
-              <DetailField label="Packets">{event.packet_count}</DetailField>
-              <DetailField label="Bytes">{event.byte_count}</DetailField>
+              <DetailField label="Packets">{formatCount(event.packet_count)}</DetailField>
+              <DetailField label="Bytes">{formatCount(event.byte_count)}</DetailField>
               <DetailField label="TCP flags">{event.tcp_flags || "—"}</DetailField>
               <DetailField label="PCAP">
                 {event.pcap_available ? (

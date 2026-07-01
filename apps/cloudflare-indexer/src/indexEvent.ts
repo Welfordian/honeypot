@@ -3,9 +3,9 @@ import type { MmdbBucket } from "../../../functions/_lib/ipinfoMmdb.js";
 import type { LiveEvent, StoredR2Event } from "./types.js";
 import { enrichIpProfile } from "../../../functions/_lib/enrichment.js";
 import { attackTechniqueIds } from "../../../functions/_lib/attackMapping.js";
-import { touchIngestWatermark, updateRollup } from "../../../functions/_lib/rollups.js";
+import { touchIngestWatermark, updateRollup, updateRollupAmount } from "../../../functions/_lib/rollups.js";
 import { publicEventRow } from "./publicEvent.js";
-import { confidenceForProfile, isOperationalSensorId } from "@honeypot/shared";
+import { confidenceForProfile, isExploitHttpPath, isOperationalSensorId } from "@honeypot/shared";
 
 interface IpProfileRow {
   first_seen: string;
@@ -173,6 +173,7 @@ async function indexRollups(db: D1Database, row: ReturnType<typeof publicEventRo
 
   for (const width of ["hour", "day"] as const) {
     await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "event_kind", row.event_kind);
+    await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "attacker_ip", row.source_ip);
     await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "protocol", row.protocol);
     await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "trap", row.trap);
     await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "severity", String(row.severity));
@@ -204,6 +205,9 @@ async function indexRollups(db: D1Database, row: ReturnType<typeof publicEventRo
       if (row.has_username || row.has_password) {
         await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "http_credential_path", row.http_path);
       }
+      if (isExploitHttpPath(row.http_path)) {
+        await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "http_exploit_path", row.http_path);
+      }
     }
     if (isHttpProtocol(row.protocol) && row.user_agent) {
       const ua = row.user_agent.length > HTTP_UA_TRUNCATE ? row.user_agent.slice(0, HTTP_UA_TRUNCATE) : row.user_agent;
@@ -220,6 +224,15 @@ async function indexRollups(db: D1Database, row: ReturnType<typeof publicEventRo
       }
       if (row.event_kind === "tcp-banner") {
         await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "net_banner_ip", row.source_ip);
+      }
+      if (row.packet_count > 0) {
+        await updateRollupAmount(db, row.occurred_at, row.indexed_at, width, "net_packets", "total", row.packet_count);
+      }
+      if (row.byte_count > 0) {
+        await updateRollupAmount(db, row.occurred_at, row.indexed_at, width, "net_bytes", "total", row.byte_count);
+      }
+      if (row.is_aggregate) {
+        await updateRollup(db, row.occurred_at, row.source_ip, row.indexed_at, width, "net_aggregate", "1");
       }
     }
   }

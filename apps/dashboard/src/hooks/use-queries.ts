@@ -17,6 +17,8 @@ import type {
   NewIpsResponse,
   OpsStatus,
   Overview,
+  OverviewCharts,
+  OverviewSummary,
   PayloadDetail,
   PayloadRow,
   PublicHuntRule,
@@ -25,10 +27,34 @@ import type {
   WebhookSubscription
 } from "@/types/api";
 
+const OVERVIEW_SINCE_HOURS = "24";
+
+export const overviewSummaryQueryOptions = {
+  queryKey: ["overview", "summary"] as const,
+  queryFn: () =>
+    api.get<OverviewSummary>(`/api/analytics/overview/summary?sinceHours=${OVERVIEW_SINCE_HOURS}`),
+  staleTime: 60_000
+};
+
+export const overviewChartsQueryOptions = {
+  queryKey: ["overview", "charts"] as const,
+  queryFn: () =>
+    api.get<OverviewCharts>(`/api/analytics/overview/charts?sinceHours=${OVERVIEW_SINCE_HOURS}`),
+  staleTime: 60_000
+};
+
+export function useOverviewSummary() {
+  return useQuery(overviewSummaryQueryOptions);
+}
+
+export function useOverviewCharts() {
+  return useQuery(overviewChartsQueryOptions);
+}
+
 export function useOverview() {
   return useQuery({
     queryKey: ["overview"],
-    queryFn: () => api.get<Overview>("/api/analytics/overview?sinceHours=24"),
+    queryFn: () => api.get<Overview>(`/api/analytics/overview?sinceHours=${OVERVIEW_SINCE_HOURS}`),
     staleTime: 60_000
   });
 }
@@ -221,7 +247,7 @@ export function useHttpIntel(sinceHours: string) {
     queryKey: ["intel-http", sinceHours],
     queryFn: () =>
       api.get<HttpIntelOverview>(`/api/v1/intel/http?sinceHours=${encodeURIComponent(sinceHours)}`),
-    staleTime: 30_000
+    staleTime: 60_000
   });
 }
 
@@ -232,7 +258,7 @@ export function useAttackTechniques(sinceHours: string) {
       api.get<AttackTechniquesResponse>(
         `/api/v1/intel/techniques?sinceHours=${encodeURIComponent(sinceHours)}`
       ),
-    staleTime: 30_000
+    staleTime: 60_000
   });
 }
 
@@ -243,7 +269,7 @@ export function useActors(sinceHours: string, limit = 20) {
       api.get<{ actors: IntelActor[] }>(
         `/api/v1/intel/actors?sinceHours=${encodeURIComponent(sinceHours)}&limit=${limit}`
       ),
-    staleTime: 30_000
+    staleTime: 60_000
   });
 }
 
@@ -252,15 +278,16 @@ export function useBehavioralCampaigns(sinceHours: string) {
     queryKey: ["intel-campaigns", sinceHours],
     queryFn: () =>
       api.get<IntelCampaigns>(`/api/v1/intel/campaigns?sinceHours=${encodeURIComponent(sinceHours)}`),
-    staleTime: 30_000
+    staleTime: 60_000
   });
 }
 
-export function useOpsStatus(options?: { refetchInterval?: number }) {
+export function useOpsStatus(options?: { refetchInterval?: number; enabled?: boolean }) {
   return useQuery<OpsStatus>({
     queryKey: ["ops-status"],
     queryFn: () => api.get<OpsStatus>("/api/v1/ops/status"),
     staleTime: 60_000,
+    ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
     ...(options?.refetchInterval !== undefined
       ? { refetchInterval: options.refetchInterval }
       : {})

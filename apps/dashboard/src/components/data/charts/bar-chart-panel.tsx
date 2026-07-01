@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { formatChartValue, formatCount } from "@/lib/format";
 import type { DimensionCount } from "@/types/api";
 
 interface BarChartPanelProps {
@@ -34,7 +35,12 @@ export function BarChartPanel({ title, data, height = 220 }: BarChartPanelProps)
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,46,40,0.8)" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#6b7f76" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#6b7f76" allowDecimals={false} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                stroke="#6b7f76"
+                allowDecimals={false}
+                tickFormatter={formatCount}
+              />
               <Tooltip
                 cursor={{ fill: "transparent" }}
                 contentStyle={{
@@ -46,6 +52,7 @@ export function BarChartPanel({ title, data, height = 220 }: BarChartPanelProps)
                 }}
                 labelStyle={{ color: "#e8f0ec" }}
                 itemStyle={{ color: "#e8f0ec" }}
+                formatter={(value) => formatChartValue(value as number | string)}
               />
               <Bar
                 dataKey="count"

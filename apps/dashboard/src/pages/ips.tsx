@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { formatCount } from "@/lib/format";
 import { useIps } from "@/hooks/use-queries";
 
 export function IpsPage() {
@@ -52,7 +53,7 @@ export function IpsPage() {
                       <TableCell>
                         <SeverityBadge value={ip.score} type="severity" />
                       </TableCell>
-                      <TableCell>{ip.event_count}</TableCell>
+                      <TableCell>{formatCount(ip.event_count)}</TableCell>
                       <TableCell>
                         {ip.last_protocol}/{ip.last_trap}
                       </TableCell>

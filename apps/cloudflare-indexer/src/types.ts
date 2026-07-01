@@ -11,6 +11,8 @@ export interface Env {
   PCAP_RETENTION_DAYS?: string;
   MAX_PAYLOAD_BYTES?: string;
   SUPPRESSED_SOURCE_IPS?: string;
+  /** Dashboard origin used to keep overview API CDN cache warm. */
+  PUBLIC_SITE_ORIGIN?: string;
 }
 
 export interface LiveEvent {
